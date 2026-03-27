@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Shared-memory key/value helper.
+#
+# Commands:
+#   set <key> <value>   Write value to /dev/shm/<key>
+#   get <key>           Print /dev/shm/<key> if it exists
+#   del <key>           Remove /dev/shm/<key> if it exists
+
+main() {
+    path="/dev/shm"
+    file="$path/$2"
+    mkdir -p "$(dirname "$file")"
+
+    if [ "$1" = "set" ]; then
+        echo "$3" > "$file"
+        return 0
+    fi
+
+    if [ "$1" = "get" ]; then
+        [ -f "$file" ] && cat "$file"
+        return 0
+    fi
+
+    if [ "$1" = "del" ]; then
+        [ -f "$file" ] && rm -f "$file"
+        return 0
+    fi
+
+    return 0
+}
+
+main "$@"

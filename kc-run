@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# KC tool dispatcher.
+#
+# Commands:
+#   <tool> [args...]    Run kc-<tool> from the real script directory
+
+main() {
+    self="$(readlink -f "$0")"
+    root="$(dirname "$self")"
+    cmd="$1"
+    shift
+    "$root/kc-$cmd" "$@"
+}
+
+main "$@"
