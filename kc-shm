@@ -1,34 +1,83 @@
 #!/bin/bash
 
 # Shared-memory key/value helper.
-#
-# Commands:
+# Summary: Stores, reads, and removes values from /dev/shm.
+
+# 
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+
+# Options:
 #   set <key> <value>   Write value to /dev/shm/<key>
 #   get <key>           Print /dev/shm/<key> if it exists
 #   del <key>           Remove /dev/shm/<key> if it exists
+#   -h                  Show help
 
+# Examples:
+#   kc-shm set mykey hello
+#   kc-shm get mykey
+#   kc-shm del mykey
+
+# Prints application usage help.
+# @return 0 on success.
+kc_shm_help() {
+    echo "Options:"
+    echo "  set <key> <value>   Write value to /dev/shm/<key>"
+    echo "  get <key>           Print /dev/shm/<key> if it exists"
+    echo "  del <key>           Remove /dev/shm/<key> if it exists"
+    echo "  -h                  Show help"
+    echo
+    echo "Examples:"
+    echo "  kc-shm set mykey hello"
+    echo "  kc-shm get mykey"
+    echo "  kc-shm del mykey"
+}
+
+# Prints one error and the help text to standard error.
+# @param $1 Error message
+# @return 1 on failure.
+kc_shm_fail() {
+    echo "Error: $1" >&2
+    kc_shm_help >&2
+    return 1
+}
+
+# Main entry point.
+# @return 0 on success, 1 on failure.
 main() {
+    local path
+    local file
+
+    if [[ "$1" = "-h" || "$1" = "--help" ]]; then
+        kc_shm_help
+        return 0
+    fi
 
     path="/dev/shm"
     file="$path/$2"
     mkdir -p "$(dirname "$file")"
 
     if [ "$1" = "set" ]; then
+        [ -n "$2" ] || kc_shm_fail "Missing key for set." || return 1
+        [ -n "${3+x}" ] || kc_shm_fail "Missing value for set." || return 1
         echo "$3" > "$file"
         return 0
     fi
 
     if [ "$1" = "get" ]; then
+        [ -n "$2" ] || kc_shm_fail "Missing key for get." || return 1
         [ -f "$file" ] && cat "$file"
         return 0
     fi
 
     if [ "$1" = "del" ]; then
+        [ -n "$2" ] || kc_shm_fail "Missing key for del." || return 1
         [ -f "$file" ] && rm -f "$file"
         return 0
     fi
 
-    return 0
+    kc_shm_fail "Unknown command."
 }
 
 main "$@"

@@ -1,31 +1,81 @@
 #!/bin/bash
 
 # kc-dmn: A simple Unix socket manager for daemonized commands.
-#
-# Commands:
+# Summary: Manages local daemon sockets and their lifecycle in /dev/shm.
+
+# 
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+
+# Options:
 #   set <key> <command> Create Unix socket with daemonized command.
 #   get <key>           Print socket path if it exists
 #   del <key>           Remove socket and kill daemon if it exists
 #   exe <key>           Execute socket
 #   sts <key>           Show daemon status
 #   lst                 List registered daemons
-# Example usage:
+#   -h                  Show help
+
+# Examples:
 #   kc-dmn set myservice /bin/cat
 #   kc-dmn get myservice
 #   kc-dmn lst
 #   kc-dmn sts myservice
 #   echo "Hello, World!" | kc-dmn exe myservice
 #   kc-dmn del myservice
+
 # Dependencies:
 #   socat
+
+# Prints application usage help.
+# @return 0 on success.
+kc_dmn_help() {
+    echo "Options:"
+    echo "  set <key> <command> Create Unix socket with daemonized command."
+    echo "  get <key>           Print socket path if it exists"
+    echo "  del <key>           Remove socket and kill daemon if it exists"
+    echo "  exe <key>           Execute socket"
+    echo "  sts <key>           Show daemon status"
+    echo "  lst                 List registered daemons"
+    echo "  -h                  Show help"
+    echo
+    echo "Examples:"
+    echo "  kc-dmn set myservice /bin/cat"
+    echo "  kc-dmn get myservice"
+    echo "  kc-dmn lst"
+    echo "  kc-dmn sts myservice"
+    echo "  echo \"Hello, World!\" | kc-dmn exe myservice"
+    echo "  kc-dmn del myservice"
+    echo
+    echo "Dependencies:"
+    echo "  socat"
+}
+
+# Prints one error and the help text to standard error.
+# @param $1 Error message
+# @return 1 on failure.
+kc_dmn_fail() {
+    echo "Error: $1" >&2
+    kc_dmn_help >&2
+    return 1
+}
 
 # Main entry point
 # @return 0 on success, 1 on failure
 main() {
+    local key
+    local path
+    local sock
+    local cmd
+
+    if [[ "$1" = "-h" || "$1" = "--help" ]]; then
+        kc_dmn_help
+        return 0
+    fi
 
     if ! command -v socat >/dev/null 2>&1; then
-        echo "kc-dmn: socat not found" >&2
-        exit 1
+        kc_dmn_fail "socat not found" || exit 1
     fi
 
     key="$2"
@@ -39,6 +89,7 @@ main() {
         "$1" = "add" ||
         "$1" = "create"
     ]]; then
+        [ -n "$key" ] || kc_dmn_fail "Missing key for set." || return 1
         set_socket
         return $?
     fi
@@ -47,6 +98,7 @@ main() {
         "$1" = "get" ||
         "$1" = "read"
     ]]; then
+        [ -n "$key" ] || kc_dmn_fail "Missing key for get." || return 1
         get_socket
         return $?
     fi
@@ -55,6 +107,7 @@ main() {
         "$1" = "sts" ||
         "$1" = "status"
     ]]; then
+        [ -n "$key" ] || kc_dmn_fail "Missing key for sts." || return 1
         sts_socket
         return $?
     fi
@@ -73,6 +126,7 @@ main() {
         "$1" = "run" ||
         "$1" = "exec"
     ]]; then
+        [ -n "$key" ] || kc_dmn_fail "Missing key for exe." || return 1
         run_socket
         return $?
     fi
@@ -83,11 +137,12 @@ main() {
         "$1" = "remove" ||
         "$1" = "rm"
     ]]; then
+        [ -n "$key" ] || kc_dmn_fail "Missing key for del." || return 1
         del_socket
         return $?
     fi
 
-    return 1
+    kc_dmn_fail "Unknown command."
 }
 
 # Create socket with daemonized command
@@ -123,8 +178,15 @@ sts_socket() {
 # List registered daemons
 # @return 0 on success, 1 on failure
 lst_socket() {
+    local file
+
     [ ! -d "$path" ] && return 1
-    ls "$path" | grep -v '\.pid$'
+
+    for file in "$path"/*; do
+        [ -e "$file" ] || return 0
+        [ -f "$file" ] && [[ "$file" = *.pid ]] && continue
+        basename "$file"
+    done
     return 0
 }
 

@@ -1,22 +1,62 @@
 #!/bin/bash
 
 # Watch and notifies folders and file changes
-#
-# Commands:
+# Summary: Emits add, upd, and del events for files and directories.
+
+# 
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+
+# Options:
 #   <path>   Path to folder or file
+#   -h       Show help
+
+# Examples:
+#   kc-wch .
+#   kc-wch ./file.txt
+
 # Dependencies:
 #   inotifywait   Provided by inotify-tools
 
 declare -A known_paths=()
+
+# Prints application usage help.
+# @return 0 on success.
+kc_wch_help() {
+    echo "Options:"
+    echo "  <path>   Path to folder or file"
+    echo "  -h       Show help"
+    echo
+    echo "Examples:"
+    echo "  kc-wch ."
+    echo "  kc-wch ./file.txt"
+    echo
+    echo "Dependencies:"
+    echo "  inotify-tools"
+}
+
+# Prints one error and the help text to standard error.
+# @param $1 Error message
+# @return 1 on failure.
+kc_wch_fail() {
+    echo "Error: $1" >&2
+    kc_wch_help >&2
+    return 1
+}
 
 # Watches the given path and dispatches to the appropriate watcher.
 # @param $1 Path to a directory or file
 # @return 0 when a watcher starts, 1 when the path is invalid
 main() {
 
+    if [[ "$1" = "-h" || "$1" = "--help" ]]; then
+        kc_wch_help
+        return 0
+    fi
+
     if ! command -v inotifywait >/dev/null 2>&1; then
-        echo "kc-wch: inotifywait not found" >&2
-        exit 1
+        kc_wch_fail "inotifywait not found" || exit 1
     fi
 
     if [ -d "$1" ]; then
@@ -29,6 +69,7 @@ main() {
         return
     fi
 
+    kc_wch_fail "Invalid path."
     exit 1
 }
 
