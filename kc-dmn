@@ -4,8 +4,18 @@
 #
 # Commands:
 #   set <key> <command> Create Unix socket with daemonized command.
-#   del <key>           Remove socket if it exists and releases daemon.
-#   run <key>           Execute socket
+#   get <key>           Print socket path if it exists
+#   del <key>           Remove socket and kill daemon if it exists
+#   exe <key>           Execute socket
+#   sts <key>           Show daemon status
+#   lst                 List registered daemons
+# Example usage:
+#   kc-dmn set myservice /bin/cat
+#   kc-dmn get myservice
+#   kc-dmn lst
+#   kc-dmn sts myservice
+#   echo "Hello, World!" | kc-dmn exe myservice
+#   kc-dmn del myservice
 # Dependencies:
 #   socat
 
@@ -18,33 +28,66 @@ main() {
         exit 1
     fi
 
-    sock="/dev/shm/kc-dmn/$2"
+    key="$2"
+    path="/dev/shm/kc-dmn"
+    sock="$path/$key"
     cmd="${*:3}"
     mkdir -p "$(dirname "$sock")"
 
-    if [ "$1" = "run" ]; then
-        run_socket
-        return $?
-    fi
-
-    if [ "$1" = "set" ]; then
+    if [[
+        "$1" = "set" ||
+        "$1" = "add" ||
+        "$1" = "create"
+    ]]; then
         set_socket
         return $?
     fi
 
-    if [ "$1" = "del" ]; then
+    if [[
+        "$1" = "get" ||
+        "$1" = "read"
+    ]]; then
+        get_socket
+        return $?
+    fi
+
+    if [[
+        "$1" = "sts" ||
+        "$1" = "status"
+    ]]; then
+        sts_socket
+        return $?
+    fi
+
+    if [[
+        "$1" = "lst"  ||
+        "$1" = "list" ||
+        "$1" = "ls"
+    ]]; then
+        lst_socket
+        return $?
+    fi
+
+    if [[
+        "$1" = "exe" ||
+        "$1" = "run" ||
+        "$1" = "exec"
+    ]]; then
+        run_socket
+        return $?
+    fi
+
+    if [[
+        "$1" = "del" ||
+        "$1" = "delete" ||
+        "$1" = "remove" ||
+        "$1" = "rm"
+    ]]; then
         del_socket
         return $?
     fi
 
     return 1
-}
-
-# Execute socket
-# @return 0 on success, 1 on failure
-run_socket() {
-    [ ! -S "$sock" ] && return 1
-    exec socat - "UNIX-CONNECT:$sock"
 }
 
 # Create socket with daemonized command
@@ -55,6 +98,41 @@ set_socket() {
     nohup socat "UNIX-LISTEN:$sock,fork" "EXEC:$cmd" >/dev/null 2>&1 &
     echo $! > "$sock.pid"
     return 0
+}
+
+# Obtain socket
+# @return 0 on success, 1 on failure
+get_socket() {
+    [ ! -S "$sock" ] && return 1
+    [ ! -f "$sock.pid" ] && return 1
+    echo "$sock"
+    return 0
+}
+
+# Show daemon status
+# @return 0 when running, 1 otherwise
+sts_socket() {
+    [ ! -S "$sock" ] && return 1
+    [ ! -f "$sock.pid" ] && return 1
+    pid="$(cat "$sock.pid")"
+    kill -0 "$pid" 2>/dev/null || return 1
+    echo "$pid running"
+    return 0
+}
+
+# List registered daemons
+# @return 0 on success, 1 on failure
+lst_socket() {
+    [ ! -d "$path" ] && return 1
+    ls "$path" | grep -v '\.pid$'
+    return 0
+}
+
+# Execute socket
+# @return 0 on success, 1 on failure
+run_socket() {
+    [ ! -S "$sock" ] && return 1
+    exec socat - "UNIX-CONNECT:$sock"
 }
 
 # Remove socket
