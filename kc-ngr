@@ -1,0 +1,157 @@
+#!/bin/bash
+
+# kc-ngr - N-Gram Generator
+# Summary: Shell implementation of descending sliding-window n-grams.
+
+# 
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+
+# Options:
+#   -max <n>   Maximum tokens per block (default 10)
+#   -min <n>   Minimum tokens per block (default 1)
+#   -sep <s>   Custom separator characters (default spaces/newlines)
+#   -h         Show help
+
+# Prints application usage help.
+# @return 0 on success.
+kc_ngr_help() {
+    echo "Options:"
+    echo "  -max <n>   Maximum tokens per block (default 10)"
+    echo "  -min <n>   Minimum tokens per block (default 1)"
+    echo "  -sep <s>   Custom separator characters (default spaces/newlines)"
+    echo "  -h         Show help"
+}
+
+# Prints one error and the help text to standard error.
+# @param $1 Error message
+# @return 1 on failure.
+kc_ngr_fail() {
+    echo "Error: $1" >&2
+    kc_ngr_help >&2
+    return 1
+}
+
+# Verifies that the given text is one unsigned integer.
+# @param $1 Raw integer text
+# @return 0 on success, 1 on failure.
+kc_ngr_is_int() {
+    case "$1" in
+        ''|*[!0-9]*)
+        return 1 ;;
+    esac
+    return 0
+}
+
+# Reads all content from standard input.
+# @return 0 on success, 1 on failure.
+kc_ngr_read_all() {
+    cat
+}
+
+# Splits the given text into tokens using the separator characters.
+# @param $1 Input text
+# @param $2 Separator character set
+# @return 0 on success, 1 on failure.
+kc_ngr_split_tokens() {
+    local text="$1"
+    local sep="$2"
+    printf '%s' "$text" | tr "$sep" '\n' | sed '/^$/d'
+}
+
+# Writes one output line to standard output.
+# @param $1 Output line
+# @return 0 on success, 1 on failure.
+kc_ngr_write_line() {
+    local line="$1"
+    printf '%s\n' "$line"
+}
+
+# Emits descending sliding-window n-grams for the given input text.
+# @param $1 Maximum tokens
+# @param $2 Minimum tokens
+# @param $3 Separator character set
+# @param $4 Input text
+# @return 0 on success, 1 on failure.
+kc_ngr_execute() {
+    local max_tokens="$1"
+    local min_tokens="$2"
+    local sep_chars="$3"
+    local input_text="$4"
+    local -a tokens=()
+    local token_count
+    local loop_max
+    local window_sz
+    local start
+    local index
+    local line
+
+    mapfile -t tokens < <(kc_ngr_split_tokens "$input_text" "$sep_chars")
+    token_count="${#tokens[@]}"
+
+    [ "$token_count" -eq 0 ] && return 0
+
+    loop_max="$max_tokens"
+    [ "$token_count" -lt "$loop_max" ] && loop_max="$token_count"
+
+    for ((window_sz = loop_max; window_sz >= min_tokens; window_sz--)); do
+        for ((start = 0; start <= token_count - window_sz; start++)); do
+            line="${tokens[$start]}"
+            for ((index = 1; index < window_sz; index++)); do
+                line="$line ${tokens[$((start + index))]}"
+            done
+            kc_ngr_write_line "$line" || return 1
+        done
+    done
+}
+
+# Application entry point.
+# @return 0 on success, 1 on failure.
+main() {
+    local max_tokens=10
+    local min_tokens=1
+    local sep_chars=$' \t\r\n'
+    local input_text
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                kc_ngr_help
+                return 0
+                ;;
+            -max)
+                shift
+                [ -n "$1" ] || kc_ngr_fail "Missing value for -max." || return 1
+                kc_ngr_is_int "$1" || kc_ngr_fail "Invalid value for -max." || return 1
+                max_tokens="$1"
+                ;;
+            -min)
+                shift
+                [ -n "$1" ] || kc_ngr_fail "Missing value for -min." || return 1
+                kc_ngr_is_int "$1" || kc_ngr_fail "Invalid value for -min." || return 1
+                min_tokens="$1"
+                ;;
+            -sep)
+                shift
+                [ -n "${1+x}" ] || kc_ngr_fail "Missing value for -sep." || return 1
+                sep_chars="$1"
+                ;;
+            *)
+                kc_ngr_fail "Unknown argument." || return 1
+                ;;
+        esac
+        shift
+    done
+
+    [ "$min_tokens" -ge 1 ] || kc_ngr_fail "-min must be >= 1." || return 1
+    [ "$max_tokens" -ge "$min_tokens" ] || kc_ngr_fail "-max cannot be less than -min." || return 1
+
+    input_text="$(kc_ngr_read_all)" || kc_ngr_fail "Unable to read stdin content." || return 1
+    [ -n "$input_text" ] || return 0
+
+    kc_ngr_execute "$max_tokens" "$min_tokens" "$sep_chars" "$input_text" || \
+    kc_ngr_fail "Failed to process n-grams."
+}
+
+main "$@"
