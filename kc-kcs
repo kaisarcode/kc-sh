@@ -1,13 +1,57 @@
 #!/bin/bash
+
 # kc-kcs - KaisarCode Standards Validator
-# Summary: Shell-side copy of kcs for simplification inside kc-sh.
-#
+# Summary: Validates KaisarCode files against formatting and standards rules.
+
+# 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0
 
+# Options:
+#   <file|dir>...   Validate one or more files or directories
+#
+# Supported file types:
+#   Shell
+#   C / C++
+#   PHP
+#   Markdown
+#
+# Examples:
+#   kc-kcs ./script.sh
+#   kc-kcs ./README.md
+#   kc-kcs .
+#
+# Dependencies:
+#   ShellCheck
+
 set -e
 set -o pipefail
+
+# Prints application usage help.
+# @return 0 on success.
+kc_kcs_help() {
+    echo "Options:"
+    echo "  <file|dir>...   Validate one or more files or directories"
+    echo "  -h              Show help"
+    echo
+    echo "Examples:"
+    echo "  kc-kcs ./script.sh"
+    echo "  kc-kcs ./README.md"
+    echo "  kc-kcs ."
+    echo
+    echo "Dependencies:"
+    echo "  shellcheck"
+}
+
+# Prints one error and the help text to standard error.
+# @param $1 Error message
+# @return 1 on failure.
+kc_kcs_fail() {
+    echo "Error: $1" >&2
+    kc_kcs_help >&2
+    return 1
+}
 
 # Prints failure details to standard error.
 # @param message Error description.
@@ -555,6 +599,7 @@ run_validator() {
     while IFS= read -r -d '' artifact; do
         artifacts+=("$artifact")
     done < <(collect_artifacts "$@")
+    [ "${#artifacts[@]}" -gt 0 ] || kc_kcs_fail "No valid files or directories were provided." || return 1
     for artifact in "${artifacts[@]}"; do
         local ftype
         ftype=$(get_file_type "$artifact")
@@ -576,4 +621,16 @@ run_validator() {
     done
 }
 
-run_validator "$@"
+# Main entry point.
+# @return 0 on success, 1 on failure.
+main() {
+    if [[ "$1" = "-h" || "$1" = "--help" ]]; then
+        kc_kcs_help
+        return 0
+    fi
+
+    [ "$#" -gt 0 ] || kc_kcs_fail "Missing file or directory." || return 1
+    run_validator "$@"
+}
+
+main "$@"
