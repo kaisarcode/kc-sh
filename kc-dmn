@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# kc-dmn: A simple Unix socket manager for daemonized commands.
+#
+# Commands:
+#   set <key> <command> Create Unix socket with daemonized command.
+#   del <key>           Remove socket if it exists and releases daemon.
+#   run <key>           Execute socket
+# Dependencies:
+#   socat
+
+# Main entry point
+# @return 0 on success, 1 on failure
+main() {
+
+    if ! command -v socat >/dev/null 2>&1; then
+        echo "kc-dmn: socat not found" >&2
+        exit 1
+    fi
+
+    sock="/dev/shm/kc-dmn/$2"
+    cmd="${*:3}"
+    mkdir -p "$(dirname "$sock")"
+
+    if [ "$1" = "run" ]; then
+        run_socket
+        return $?
+    fi
+
+    if [ "$1" = "set" ]; then
+        set_socket
+        return $?
+    fi
+
+    if [ "$1" = "del" ]; then
+        del_socket
+        return $?
+    fi
+
+    return 1
+}
+
+# Execute socket
+# @return 0 on success, 1 on failure
+run_socket() {
+    [ ! -S "$sock" ] && return 1
+    exec socat - "UNIX-CONNECT:$sock"
+}
+
+# Create socket with daemonized command
+# @return 0 on success, 1 on failure
+set_socket() {
+    [ -z "$cmd" ] && return 1
+    [ -S "$sock" ] && return 1
+    nohup socat "UNIX-LISTEN:$sock,fork" "EXEC:$cmd" >/dev/null 2>&1 &
+    echo $! > "$sock.pid"
+    return 0
+}
+
+# Remove socket
+# @return 0 on success, 1 on failure
+del_socket() {
+    [ ! -S "$sock" ] && return 1
+    if [ -f "$sock.pid" ]; then
+        kill "$(cat "$sock.pid")" 2>/dev/null
+        rm -f "$sock.pid"
+    fi
+    rm -f "$sock"
+    return 0
+}
+
+main "$@"

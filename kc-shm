@@ -8,6 +8,7 @@
 #   del <key>           Remove /dev/shm/<key> if it exists
 
 main() {
+
     path="/dev/shm"
     file="$path/$2"
     mkdir -p "$(dirname "$file")"
