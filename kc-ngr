@@ -3,7 +3,6 @@
 # kc-ngr - N-Gram Generator
 # Summary: Shell implementation of descending sliding-window n-grams.
 
-# 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0

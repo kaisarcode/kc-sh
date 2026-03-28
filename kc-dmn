@@ -3,7 +3,6 @@
 # kc-dmn: A simple Unix socket manager for daemonized commands.
 # Summary: Manages local daemon sockets and their lifecycle in /dev/shm.
 
-# 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0

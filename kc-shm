@@ -3,7 +3,6 @@
 # Shared-memory key/value helper.
 # Summary: Stores, reads, and removes values from /dev/shm.
 
-# 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0
