@@ -3,7 +3,6 @@
 # KC tool dispatcher.
 # Summary: Runs kc-sh tools from the current script directory.
 
-# 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0

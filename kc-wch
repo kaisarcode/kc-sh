@@ -3,7 +3,6 @@
 # Watch and notifies folders and file changes
 # Summary: Emits add, upd, and del events for files and directories.
 
-# 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0

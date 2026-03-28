@@ -3,7 +3,6 @@
 # kc-kcs - KaisarCode Standards Validator
 # Summary: Validates KaisarCode files against formatting and standards rules.
 
-# 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0
@@ -11,19 +10,19 @@
 # Options:
 #   -type <t>       Force file type: sh|shell|c|cpp|php|md
 #   <file|dir>...   Validate one or more files or directories
-#
+
 # Supported file types:
 #   Shell
 #   C / C++
 #   PHP
 #   Markdown
-#
+
 # Examples:
 #   kc-kcs -type shell ./script.txt
 #   kc-kcs ./script.sh
 #   kc-kcs ./README.md
 #   kc-kcs .
-#
+
 # Dependencies:
 #   ShellCheck
 
@@ -465,7 +464,6 @@ validate_no_internal_comments() {
                 if (NR > 20) { print NR; exit }
             }
             index(scan, sl as) && scan !~ /^[[:space:]]*\/\*\*/ {
-                # Allow block comments only for definitions, not inside logic
                 closing_line = NR
                 in_block_comment = 1
                 next
@@ -478,7 +476,6 @@ validate_no_internal_comments() {
                 next
             }
             closing_line && NR == closing_line + 1 {
-                # If the line after /* */ is logic, fail
                 if ($0 ~ /^(if|for|while|switch|return|[[:space:]]*[a-zA-Z0-9_]+ =)/) {
                     print NR - 1; exit
                 }
@@ -622,7 +619,7 @@ collect_artifacts() {
             continue
         fi
         if [ -d "$arg" ]; then
-            find "$arg" \
+            find "$arg" -mindepth 1 \
                 \( -type d -name '.*' -o -type f -name '.*' \) -prune -o \
                 -type f -print0
         fi
