@@ -1,0 +1,191 @@
+#!/bin/bash
+
+# kc-tpm - Text Profile Matcher
+# Summary: Emits a 0 to 1 matching probability against a text map.
+
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+
+# Options:
+#   <map>    Path to text map file
+#   -n <n>   N-gram size (default 3)
+#   -h       Show help
+
+# Examples:
+#   echo "Hola cómo estás?" | kc-tpm es.map
+#   echo "Hey, what's up?" | kc-tpm -n 3 en.map
+
+# Prints application usage help.
+# @return 0 on success.
+kc_tpm_help() {
+    echo "Options:"
+    echo "  <map>    Path to text map file"
+    echo "  -n <n>   N-gram size (default 3)"
+    echo "  -h       Show help"
+    echo
+    echo "Examples:"
+    echo "  echo \"Hola cómo estás?\" | kc-tpm es.map"
+    echo "  echo \"Hello, what's up bro?\" | kc-tpm -n 3 en.map"
+}
+
+# Prints one error and the help text to standard error.
+# @param $1 Error message
+# @return 1 on failure.
+kc_tpm_fail() {
+    echo "Error: $1" >&2
+    kc_tpm_help >&2
+    return 1
+}
+
+# Returns success when the given value is an integer string.
+# @param $1 Value to validate
+# @return 0 when valid, 1 otherwise.
+kc_tpm_is_int() {
+    case "$1" in
+        ''|*[!0-9]*)
+        return 1 ;;
+    esac
+    return 0
+}
+
+# Normalizes text by collapsing whitespace and lowercasing ASCII letters.
+# Trims leading and trailing spaces.
+# @param $1 Input text
+# @return 0 on success, 1 on failure.
+kc_tpm_norm() {
+    local text="$1"
+    printf '%s' "$text" \
+    | awk '{
+    if (NR > 1) { printf " " }
+    printf "%s", $0 }
+    END { printf "\n" }' \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -s '[:space:]' ' ' \
+    | sed 's/^ *//; s/ *$//'
+}
+
+# Emits one n-gram per line from the given text.
+# @param $1 Input text
+# @param $2 N-gram size
+# @return 0 on success, 1 on failure.
+kc_tpm_grams() {
+    local text="$1"
+    local size="$2"
+    local norm_text
+    local length
+    local index
+    norm_text="$(kc_tpm_norm "$text")"
+    [ -n "$norm_text" ] || return 0
+    length="${#norm_text}"
+    [ "$length" -ge "$size" ] || return 0
+    for ((index = 0; index <= length - size; index++)); do
+        printf '%s\n' "${norm_text:index:size}"
+    done
+}
+
+# Emits one aggregated n-gram profile for the given text.
+# Each output line uses the format: <gram><TAB><count>
+# @param $1 Input text
+# @param $2 N-gram size
+# @return 0 on success, 1 on failure.
+kc_tpm_profile_text() {
+    local text="$1"
+    local size="$2"
+    kc_tpm_grams "$text" "$size" \
+    | sort \
+    | uniq -c \
+    | while read -r count gram; do
+        printf '%s\t%s\n' "$gram" "$count"
+    done
+}
+
+# Emits one aggregated n-gram profile for the given map file.
+# Each output line uses the format: <gram><TAB><count>
+# @param $1 Map file path
+# @param $2 N-gram size
+# @return 0 on success, 1 on failure.
+kc_tpm_profile_file() {
+    local file="$1"
+    local size="$2"
+    local text
+    text="$(cat "$file")"
+    kc_tpm_profile_text "$text" "$size"
+}
+
+# Emits one 0..1 score from the given map and input profiles.
+# @param $1 Map profile text
+# @param $2 Input profile text
+# @return 0 on success.
+kc_tpm_score_profiles() {
+    awk -F '\t' '
+    NR == FNR { map[$1] = $2; map_total += $2; map_vocab += 1; next }
+    { gram = $1; count = $2; input_total += count; numerator = ((gram in map) ? map[gram] : 0) + 1; denominator = map_total + map_vocab; log_score += count * log(numerator / denominator) }
+    END {
+    if (input_total <= 0 || map_total <= 0 || map_vocab <= 0) { printf "0.000000\n"; exit }
+    avg_log = log_score / input_total
+    score = 1.0 / (1.0 + exp(-8.0 * (avg_log - (-5.25))))
+    if (score < 0.0) score = 0.0
+    if (score > 1.0) score = 1.0
+    printf "%.6f\n", score }' \
+    <(printf '%s\n' "$1") \
+    <(printf '%s\n' "$2")
+}
+
+# Emits one 0..1 score for the given input text against the map file.
+# @param $1 Input text
+# @param $2 Map file path
+# @param $3 N-gram size
+# @return 0 on success.
+kc_tpm_score() {
+    local input_text="$1"
+    local map_file="$2"
+    local size="$3"
+    local input_profile
+    local map_profile
+    input_profile="$(kc_tpm_profile_text "$input_text" "$size")"
+    [ -n "$input_profile" ] || return 0
+    map_profile="$(kc_tpm_profile_file "$map_file" "$size")"
+    [ -n "$map_profile" ] || { printf '0.000000\n'; return 0; }
+    kc_tpm_score_profiles "$map_profile" "$input_profile"
+}
+
+# Application entry point.
+# @param $@ Application arguments
+# @return 0 on success, 1 on failure.
+main() {
+    local n=3
+    local map_file
+    local input_text
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                kc_tpm_help
+                return 0 ;;
+            -n)
+                shift
+                [ -n "$1" ] || kc_tpm_fail "Missing value for -n." || return 1
+                kc_tpm_is_int "$1" || kc_tpm_fail "Invalid value for -n." || return 1
+                [ "$1" -ge 1 ] || kc_tpm_fail "Invalid value for -n." || return 1
+                n="$1" ;;
+            -*)
+                kc_tpm_fail "Unknown argument." || return 1 ;;
+            *)
+                [ -z "$map_file" ] || kc_tpm_fail "Unknown argument." || return 1
+                map_file="$1" ;;
+        esac
+        shift
+    done
+
+    [ -n "$map_file" ] || kc_tpm_fail "Missing map." || return 1
+    [ -f "$map_file" ] || kc_tpm_fail "Invalid map." || return 1
+    [ -r "$map_file" ] || kc_tpm_fail "Invalid map." || return 1
+
+    input_text="$(cat)"
+    [ -n "$input_text" ] || return 0
+
+    kc_tpm_score "$input_text" "$map_file" "$n"
+}
+
+main "$@"

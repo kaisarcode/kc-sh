@@ -49,7 +49,7 @@ This repository is intentionally minimal. The preferred workflow is:
 KaisarCode shell scripts in this repository should be checked with:
 
 ```bash
-kcs ./kc-*
+kc-kcs ./kc-*
 ```
 
 ---
