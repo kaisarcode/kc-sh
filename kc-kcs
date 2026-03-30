@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # kc-kcs - KaisarCode Standards Validator
 # Summary: Validates KaisarCode files against formatting and standards rules.
 
