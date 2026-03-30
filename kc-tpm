@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # kc-tpm - Text Profile Matcher
-# Summary: Emits a 0 to 1 matching probability against a text map.
+# Summary: Emits a 0 to 1 match score against a text map.
 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
@@ -13,8 +13,31 @@
 #   -h       Show help
 
 # Examples:
-#   echo "Hola cómo estás?" | kc-tpm es.map
-#   echo "Hey, what's up?" | kc-tpm -n 3 en.map
+#  
+#   Create map files with representative text samples.
+#   cat > es.map <<'EOF'
+#   hola mis amigos como estan
+#   buenos dias a todos
+#   este proyecto compara texto corto
+#   el zorro marron salta sobre el perro perezoso
+#   EOF
+#  
+#   cat > en.map <<'EOF'
+#   hello my friends how are you
+#   good morning everyone
+#   this project matches short text
+#   the quick brown fox jumps over the lazy dog
+#   EOF
+#  
+#   Score input text against the maps.
+#   echo "The cat is under the table" | kc-tpm es.map
+#   0.322650
+#   echo "El gato está debajo de la mesa" | kc-tpm es.map
+#   0.692323
+#   echo "The cat is under the table" | kc-tpm en.map
+#   0.763264
+#   echo "El gato está debajo de la mesa" | kc-tpm en.map
+#   0.246135
 
 # Prints application usage help.
 # @return 0 on success.
@@ -144,7 +167,7 @@ kc_tpm_score() {
     local input_profile
     local map_profile
     input_profile="$(kc_tpm_profile_text "$input_text" "$size")"
-    [ -n "$input_profile" ] || return 0
+    [ -n "$input_profile" ] || { printf '0.000000\n'; return 0; }
     map_profile="$(kc_tpm_profile_file "$map_file" "$size")"
     [ -n "$map_profile" ] || { printf '0.000000\n'; return 0; }
     kc_tpm_score_profiles "$map_profile" "$input_profile"
