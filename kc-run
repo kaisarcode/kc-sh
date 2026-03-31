@@ -14,7 +14,7 @@
 # Examples:
 #   kc-run shm set mykey hello
 #   kc-run shm get mykey
-#   kc-run dmn lst
+#   kc-run dmn ls
 
 # Prints application usage help.
 # @return 0 on success.
@@ -26,7 +26,7 @@ kc_run_help() {
     echo "Examples:"
     echo "  kc-run shm set mykey hello"
     echo "  kc-run shm get mykey"
-    echo "  kc-run dmn lst"
+    echo "  kc-run dmn ls"
 }
 
 # Prints one error and the help text to standard error.
