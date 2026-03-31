@@ -10,6 +10,7 @@
 # Options:
 #   set <key> <value>   Write value to FIFO key
 #   get <key>           Read value from FIFO key
+#   fl <key>            Print FIFO file path
 #   del <key>           Remove FIFO key if it exists
 #   ls                  List registered FIFO keys
 #   <key>               Write standard input to FIFO key
@@ -18,6 +19,7 @@
 # Examples:
 #   kc-fifo set mypipe hello
 #   kc-fifo get mypipe
+#   kc-fifo fl mypipe
 #   echo "Hello, World!" | kc-fifo mypipe
 #   kc-fifo del mypipe
 #   kc-fifo ls
@@ -31,6 +33,7 @@ kc_fifo_help() {
     echo "Options:"
     echo "  set <key> <value>   Write value to FIFO key"
     echo "  get <key>           Read value from FIFO key"
+    echo "  fl <key>            Print FIFO file path"
     echo "  del <key>           Remove FIFO key if it exists"
     echo "  ls                  List registered FIFO keys"
     echo "  <key>               Write standard input to FIFO key"
@@ -39,6 +42,7 @@ kc_fifo_help() {
     echo "Examples:"
     echo "  kc-fifo set mypipe hello"
     echo "  kc-fifo get mypipe"
+    echo "  kc-fifo fl mypipe"
     echo "  echo \"Hello, World!\" | kc-fifo mypipe"
     echo "  kc-fifo del mypipe"
     echo "  kc-fifo ls"
@@ -112,6 +116,14 @@ main() {
         [ -n "$key" ] || kc_fifo_fail "Missing key for get." || return 1
         get_fifo
         return $?
+    fi
+
+    if [[ "$1" = "fl" ]]; then
+        key="$2"
+        fifo="$path/$key"
+        [ -n "$key" ] || kc_fifo_fail "Missing key for fl." || return 1
+        echo "$fifo"
+        return 0
     fi
 
     if [[ "$1" = "del" ]]; then

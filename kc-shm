@@ -10,6 +10,7 @@
 # Options:
 #   set <key> <value>   Write value to shared memory
 #   get <key>           Read value from shared memory
+#   fl <key>            Print shared memory file path
 #   del <key>           Remove shared memory if it exists
 #   ls                  List registered shared memorys
 #   <key>               Write standard input to shared memory
@@ -18,6 +19,7 @@
 # Examples:
 #   kc-shm set mykey hello
 #   kc-shm get mykey
+#   kc-shm fl mykey
 #   echo hello | kc-shm mykey
 #   kc-shm del mykey
 #   kc-shm ls
@@ -28,6 +30,7 @@ kc_shm_help() {
     echo "Options:"
     echo "  set <key> <value>   Write value to shared memory"
     echo "  get <key>           Read value from shared memory"
+    echo "  fl <key>            Print shared memory file path"
     echo "  del <key>           Remove shared memory if it exists"
     echo "  ls                  List registered shared memorys"
     echo "  <key>               Write standard input to shared memory"
@@ -36,6 +39,7 @@ kc_shm_help() {
     echo "Examples:"
     echo "  kc-shm set mykey hello"
     echo "  kc-shm get mykey"
+    echo "  kc-shm fl mykey"
     echo "  echo hello | kc-shm mykey"
     echo "  kc-shm del mykey"
     echo "  kc-shm ls"
@@ -89,6 +93,12 @@ main() {
     if [[ "$1" = "get" ]]; then
         [ -n "$2" ] || kc_shm_fail "Missing key for get." || return 1
         [ -f "$file" ] && cat "$file"
+        return 0
+    fi
+
+    if [[ "$1" = "fl" ]]; then
+        [ -n "$2" ] || kc_shm_fail "Missing key for fl." || return 1
+        echo "$file"
         return 0
     fi
 
