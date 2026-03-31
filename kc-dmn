@@ -1,28 +1,26 @@
 #!/bin/bash
 
 # kc-dmn: A simple Unix socket manager for daemonized commands.
-# Summary: Manages local daemon sockets and their lifecycle in XDG_RUNTIME_DIR.
+# Summary: Registers read commands and writes values through local daemon sockets in XDG_RUNTIME_DIR.
 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0
 
 # Options:
-#   set <key> <command> Create Unix socket with daemonized command.
-#   get <key>           Print socket path if it exists
-#   del <key>           Remove socket and kill daemon if it exists
-#   exe <key>           Execute socket
-#   sts <key>           Show daemon status
-#   lst                 List registered daemons
+#   get <key> <command> Register daemonized command for key
+#   set <key> <value>   Write value to registered daemon key
+#   del <key>           Remove daemon key and kill registered process if it exists
+#   ls                  List registered daemon keys
+#   <key>               Write standard input to registered daemon key
 #   -h                  Show help
 
 # Examples:
-#   kc-dmn set myservice /bin/cat
-#   kc-dmn get myservice
-#   kc-dmn lst
-#   kc-dmn sts myservice
-#   echo "Hello, World!" | kc-dmn exe myservice
+#   kc-dmn get myservice /bin/cat
+#   kc-dmn set myservice hello
+#   echo "Hello, World!" | kc-dmn myservice
 #   kc-dmn del myservice
+#   kc-dmn ls
 
 # Dependencies:
 #   socat
@@ -31,21 +29,19 @@
 # @return 0 on success.
 kc_dmn_help() {
     echo "Options:"
-    echo "  set <key> <command> Create Unix socket with daemonized command."
-    echo "  get <key>           Print socket path if it exists"
-    echo "  del <key>           Remove socket and kill daemon if it exists"
-    echo "  exe <key>           Execute socket"
-    echo "  sts <key>           Show daemon status"
-    echo "  lst                 List registered daemons"
+    echo "  get <key> <command> Register daemonized command for key"
+    echo "  set <key> <value>   Write value to registered daemon key"
+    echo "  del <key>           Remove daemon key and kill registered process if it exists"
+    echo "  ls                  List registered daemon keys"
+    echo "  <key>               Write standard input to registered daemon key"
     echo "  -h                  Show help"
     echo
     echo "Examples:"
-    echo "  kc-dmn set myservice /bin/cat"
-    echo "  kc-dmn get myservice"
-    echo "  kc-dmn lst"
-    echo "  kc-dmn sts myservice"
-    echo "  echo \"Hello, World!\" | kc-dmn exe myservice"
+    echo "  kc-dmn get myservice /bin/cat"
+    echo "  kc-dmn set myservice hello"
+    echo "  echo \"Hello, World!\" | kc-dmn myservice"
     echo "  kc-dmn del myservice"
+    echo "  kc-dmn ls"
     echo
     echo "Dependencies:"
     echo "  socat"
@@ -87,9 +83,6 @@ kc_dmn_dir() {
 # @return 0 on success, 1 on failure
 main() {
     local key
-    local path
-    local sock
-    local cmd
 
     if [[ "$1" = "-h" || "$1" = "--help" ]]; then
         kc_dmn_help
@@ -97,110 +90,75 @@ main() {
     fi
 
     if ! command -v socat >/dev/null 2>&1; then
-        kc_dmn_fail "socat not found" || exit 1
+        kc_dmn_fail "socat not found" || return 1
     fi
 
-    key="$2"
     path="$(kc_dmn_dir)"
-    sock="$path/$key"
-    cmd="${*:3}"
     mkdir -p "$path" || return 1
 
-    if [[
-        "$1" = "set" ||
-        "$1" = "add" ||
-        "$1" = "create"
-    ]]; then
-        [ -n "$key" ] || kc_dmn_fail "Missing key for set." || return 1
-        set_socket
-        return $?
-    fi
-
-    if [[
-        "$1" = "get" ||
-        "$1" = "read"
-    ]]; then
+    if [[ "$1" = "get" ]]; then
+        key="$2"
+        cmd="${*:3}"
+        sock="$path/$key"
         [ -n "$key" ] || kc_dmn_fail "Missing key for get." || return 1
+        [ -n "$cmd" ] || kc_dmn_fail "Missing command for get." || return 1
         get_socket
         return $?
     fi
 
-    if [[
-        "$1" = "sts" ||
-        "$1" = "status"
-    ]]; then
-        [ -n "$key" ] || kc_dmn_fail "Missing key for sts." || return 1
-        sts_socket
+    if [[ "$1" = "set" ]]; then
+        key="$2"
+        value="${*:3}"
+        sock="$path/$key"
+        [ -n "$key" ] || kc_dmn_fail "Missing key for set." || return 1
+        [ -n "${3+x}" ] || kc_dmn_fail "Missing value for set." || return 1
+        set_socket
         return $?
     fi
 
-    if [[
-        "$1" = "lst"  ||
-        "$1" = "list" ||
-        "$1" = "ls"
-    ]]; then
-        lst_socket
-        return $?
-    fi
-
-    if [[
-        "$1" = "exe" ||
-        "$1" = "run" ||
-        "$1" = "exec"
-    ]]; then
-        [ -n "$key" ] || kc_dmn_fail "Missing key for exe." || return 1
-        run_socket
-        return $?
-    fi
-
-    if [[
-        "$1" = "del" ||
-        "$1" = "delete" ||
-        "$1" = "remove" ||
-        "$1" = "rm"
-    ]]; then
+    if [[ "$1" = "del" ]]; then
+        key="$2"
+        sock="$path/$key"
         [ -n "$key" ] || kc_dmn_fail "Missing key for del." || return 1
         del_socket
         return $?
     fi
 
-    kc_dmn_fail "Unknown command."
+    if [[ "$1" = "ls" ]]; then
+        ls_socket
+        return $?
+    fi
+
+    key="$1"
+    sock="$path/$key"
+    [ -n "$key" ] || kc_dmn_fail "Missing key." || return 1
+    io_socket
 }
 
-# Create socket with daemonized command
-# @return 0 on success, 1 on failure
-set_socket() {
-    [ -z "$cmd" ] && return 1
-    [ -S "$sock" ] && return 1
-    nohup socat "UNIX-LISTEN:$sock,fork" "EXEC:$cmd" >/dev/null 2>&1 &
-    echo $! > "$sock.pid"
-    return 0
-}
-
-# Obtain socket
+# Register daemonized command for key
+# Replaces existing daemon if it already exists.
 # @return 0 on success, 1 on failure
 get_socket() {
-    [ ! -S "$sock" ] && return 1
-    [ ! -f "$sock.pid" ] && return 1
-    echo "$sock"
+    del_socket >/dev/null 2>&1
+    nohup socat "UNIX-LISTEN:$sock,fork" "EXEC:$cmd" >/dev/null 2>&1 &
+    echo "$!" > "$sock.pid"
     return 0
 }
 
-# Show daemon status
-# @return 0 when running, 1 otherwise
-sts_socket() {
-    local pid
+# Write value to daemon socket
+# @return 0 on success, 1 on failure
+set_socket() {
     [ -S "$sock" ] || return 1
-    [ -f "$sock.pid" ] || return 1
-    pid="$(cat "$sock.pid")"
-    kill -0 "$pid" 2>/dev/null
+    printf '%s\n' "$value" | socat - "UNIX-CONNECT:$sock"
 }
 
-# List registered daemons
+# List registered daemon keys
 # @return 0 on success, 1 on failure
-lst_socket() {
+ls_socket() {
     local file
-    [ ! -d "$path" ] && return 1
+
+    [ -d "$path" ] || return 1
+
     for file in "$path"/*; do
         [ -e "$file" ] || return 0
         [ -f "$file" ] && [[ "$file" = *.pid ]] && continue
@@ -209,17 +167,16 @@ lst_socket() {
     return 0
 }
 
-# Execute socket
+# Write standard input to daemon socket
 # @return 0 on success, 1 on failure
-run_socket() {
-    [ ! -S "$sock" ] && return 1
+io_socket() {
+    [ -S "$sock" ] || return 1
     exec socat - "UNIX-CONNECT:$sock"
 }
 
-# Remove socket
+# Remove daemon socket
 # @return 0 on success, 1 on failure
 del_socket() {
-    [ ! -S "$sock" ] && return 1
     if [ -f "$sock.pid" ]; then
         kill "$(cat "$sock.pid")" 2>/dev/null
         rm -f "$sock.pid"

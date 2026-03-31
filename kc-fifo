@@ -1,29 +1,26 @@
 #!/bin/bash
 
 # kc-fifo: A simple named pipe manager.
-# Summary: Manages local FIFO pipes and their lifecycle in XDG_RUNTIME_DIR.
+# Summary: Writes and reads local FIFO pipes in XDG_RUNTIME_DIR.
 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0
 
 # Options:
-#   set <key>           Create FIFO pipe
-#   get <key>           Print FIFO path if it exists
-#   del <key>           Remove FIFO pipe if it exists
-#   sts <key>           Show FIFO status
-#   lst                 List registered FIFOs
-#   <key>               Write standard input to FIFO or read FIFO to standard output
+#   set <key> <value>   Write value to FIFO key
+#   get <key>           Read value from FIFO key
+#   del <key>           Remove FIFO key if it exists
+#   ls                  List registered FIFO keys
+#   <key>               Write standard input to FIFO key
 #   -h                  Show help
 
 # Examples:
-#   kc-fifo set mypipe
+#   kc-fifo set mypipe hello
 #   kc-fifo get mypipe
-#   kc-fifo lst
-#   kc-fifo sts mypipe
 #   echo "Hello, World!" | kc-fifo mypipe
-#   kc-fifo mypipe
 #   kc-fifo del mypipe
+#   kc-fifo ls
 
 # Dependencies:
 #   mkfifo
@@ -32,22 +29,19 @@
 # @return 0 on success.
 kc_fifo_help() {
     echo "Options:"
-    echo "  set <key>           Create FIFO pipe"
-    echo "  get <key>           Print FIFO path if it exists"
-    echo "  del <key>           Remove FIFO pipe if it exists"
-    echo "  sts <key>           Show FIFO status"
-    echo "  lst                 List registered FIFOs"
-    echo "  <key>               Write standard input to FIFO or read FIFO to standard output"
+    echo "  set <key> <value>   Write value to FIFO key"
+    echo "  get <key>           Read value from FIFO key"
+    echo "  del <key>           Remove FIFO key if it exists"
+    echo "  ls                  List registered FIFO keys"
+    echo "  <key>               Write standard input to FIFO key"
     echo "  -h                  Show help"
     echo
     echo "Examples:"
-    echo "  kc-fifo set mypipe"
+    echo "  kc-fifo set mypipe hello"
     echo "  kc-fifo get mypipe"
-    echo "  kc-fifo lst"
-    echo "  kc-fifo sts mypipe"
     echo "  echo \"Hello, World!\" | kc-fifo mypipe"
-    echo "  kc-fifo mypipe"
     echo "  kc-fifo del mypipe"
+    echo "  kc-fifo ls"
     echo
     echo "Dependencies:"
     echo "  mkfifo"
@@ -89,8 +83,6 @@ kc_fifo_dir() {
 # @return 0 on success, 1 on failure
 main() {
     local key
-    local path
-    local fifo
 
     if [[ "$1" = "-h" || "$1" = "--help" ]]; then
         kc_fifo_help
@@ -98,105 +90,79 @@ main() {
     fi
 
     if ! command -v mkfifo >/dev/null 2>&1; then
-        kc_fifo_fail "mkfifo not found" || exit 1
+        kc_fifo_fail "mkfifo not found" || return 1
     fi
 
-    if [[
-        "$1" = "set" ||
-        "$1" = "add" ||
-        "$1" = "create"
-    ]]; then
+    path="$(kc_fifo_dir)"
+    mkdir -p "$path" || return 1
+
+    if [[ "$1" = "set" ]]; then
         key="$2"
-        [ -n "$key" ] || kc_fifo_fail "Missing key for set." || return 1
-        path="$(kc_fifo_dir)"
+        value="${*:3}"
         fifo="$path/$key"
-        mkdir -p "$path" || return 1
+        [ -n "$key" ] || kc_fifo_fail "Missing key for set." || return 1
+        [ -n "${3+x}" ] || kc_fifo_fail "Missing value for set." || return 1
         set_fifo
         return $?
     fi
 
-    if [[
-        "$1" = "get" ||
-        "$1" = "read"
-    ]]; then
+    if [[ "$1" = "get" ]]; then
         key="$2"
-        [ -n "$key" ] || kc_fifo_fail "Missing key for get." || return 1
-        path="$(kc_fifo_dir)"
         fifo="$path/$key"
+        [ -n "$key" ] || kc_fifo_fail "Missing key for get." || return 1
         get_fifo
         return $?
     fi
 
-    if [[
-        "$1" = "sts" ||
-        "$1" = "status"
-    ]]; then
+    if [[ "$1" = "del" ]]; then
         key="$2"
-        [ -n "$key" ] || kc_fifo_fail "Missing key for sts." || return 1
-        path="$(kc_fifo_dir)"
         fifo="$path/$key"
-        sts_fifo
-        return $?
-    fi
-
-    if [[
-        "$1" = "lst"  ||
-        "$1" = "list" ||
-        "$1" = "ls"
-    ]]; then
-        path="$(kc_fifo_dir)"
-        lst_fifo
-        return $?
-    fi
-
-    if [[
-        "$1" = "del" ||
-        "$1" = "delete" ||
-        "$1" = "remove" ||
-        "$1" = "rm"
-    ]]; then
-        key="$2"
         [ -n "$key" ] || kc_fifo_fail "Missing key for del." || return 1
-        path="$(kc_fifo_dir)"
-        fifo="$path/$key"
         del_fifo
         return $?
     fi
 
+    if [[ "$1" = "ls" ]]; then
+        ls_fifo
+        return $?
+    fi
+
     key="$1"
-    [ -n "$key" ] || kc_fifo_fail "Missing key." || return 1
-    path="$(kc_fifo_dir)"
     fifo="$path/$key"
+    [ -n "$key" ] || kc_fifo_fail "Missing key." || return 1
     io_fifo
 }
 
-# Create FIFO pipe
+# Ensure FIFO key exists
 # @return 0 on success, 1 on failure
-set_fifo() {
+ensure_fifo() {
+    [ -p "$fifo" ] && return 0
     [ -e "$fifo" ] && return 1
     mkfifo "$fifo" || return 1
     return 0
 }
 
-# Obtain FIFO pipe
+# Write value to FIFO key
+# @return 0 on success, 1 on failure
+set_fifo() {
+    ensure_fifo || return 1
+    printf '%s\n' "$value" > "$fifo"
+}
+
+# Read value from FIFO key
 # @return 0 on success, 1 on failure
 get_fifo() {
-    [ ! -p "$fifo" ] && return 1
-    echo "$fifo"
-    return 0
+    ensure_fifo || return 1
+    cat < "$fifo"
 }
 
-# Show FIFO status
-# @return 0 when available, 1 otherwise
-sts_fifo() {
-    [ -p "$fifo" ]
-}
-
-# List registered FIFOs
+# List registered FIFO keys
 # @return 0 on success, 1 on failure
-lst_fifo() {
+ls_fifo() {
     local file
-    [ ! -d "$path" ] && return 1
+
+    [ -d "$path" ] || return 1
+
     for file in "$path"/*; do
         [ -e "$file" ] || return 0
         [ -p "$file" ] || continue
@@ -205,24 +171,16 @@ lst_fifo() {
     return 0
 }
 
-# Use FIFO pipe for input or output.
-# Writes standard input to FIFO when input is piped.
-# Reads FIFO to standard output when input is interactive.
+# Write standard input to FIFO key
 # @return 0 on success, 1 on failure
 io_fifo() {
-    [ ! -p "$fifo" ] && return 1
-    if [ -t 0 ]; then
-        cat < "$fifo"
-        return $?
-    fi
+    ensure_fifo || return 1
     cat > "$fifo"
-    return $?
 }
 
-# Remove FIFO pipe
+# Remove FIFO key
 # @return 0 on success, 1 on failure
 del_fifo() {
-    [ ! -p "$fifo" ] && return 1
     rm -f "$fifo"
     return 0
 }

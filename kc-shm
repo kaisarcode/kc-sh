@@ -1,36 +1,44 @@
 #!/bin/bash
 
 # Shared-memory key/value helper.
-# Summary: Stores, reads, and removes values from /dev/shm.
+# Summary: Stores, reads, and removes values from /dev/shm/kc-shm.
 
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: GNU GPL v3.0
 
 # Options:
-#   set <key> <value>   Write value to /dev/shm/<key>
-#   get <key>           Print /dev/shm/<key> if it exists
-#   del <key>           Remove /dev/shm/<key> if it exists
+#   set <key> <value>   Write value to shared memory
+#   get <key>           Read value from shared memory
+#   del <key>           Remove shared memory if it exists
+#   ls                  List registered shared memorys
+#   <key>               Write standard input to shared memory
 #   -h                  Show help
 
 # Examples:
 #   kc-shm set mykey hello
 #   kc-shm get mykey
+#   echo hello | kc-shm mykey
 #   kc-shm del mykey
+#   kc-shm ls
 
 # Prints application usage help.
 # @return 0 on success.
 kc_shm_help() {
     echo "Options:"
-    echo "  set <key> <value>   Write value to /dev/shm/<key>"
-    echo "  get <key>           Print /dev/shm/<key> if it exists"
-    echo "  del <key>           Remove /dev/shm/<key> if it exists"
+    echo "  set <key> <value>   Write value to shared memory"
+    echo "  get <key>           Read value from shared memory"
+    echo "  del <key>           Remove shared memory if it exists"
+    echo "  ls                  List registered shared memorys"
+    echo "  <key>               Write standard input to shared memory"
     echo "  -h                  Show help"
     echo
     echo "Examples:"
     echo "  kc-shm set mykey hello"
     echo "  kc-shm get mykey"
+    echo "  echo hello | kc-shm mykey"
     echo "  kc-shm del mykey"
+    echo "  kc-shm ls"
 }
 
 # Prints one error and the help text to standard error.
@@ -47,36 +55,74 @@ kc_shm_fail() {
 main() {
     local path
     local file
+    local key
+    local value
 
     if [[ "$1" = "-h" || "$1" = "--help" ]]; then
         kc_shm_help
         return 0
     fi
 
-    path="/dev/shm"
-    file="$path/$2"
-    mkdir -p "$(dirname "$file")"
+    path="/dev/shm/kc-shm"
 
-    if [ "$1" = "set" ]; then
+    if [[ "$1" = "ls" ]]; then
+        mkdir -p "$path" || return 1
+        ls_keys "$path"
+        return $?
+    fi
+
+    key="$2"
+    [ -n "$key" ] || key="$1"
+    [ -n "$key" ] || kc_shm_fail "Missing key." || return 1
+
+    file="$path/$key"
+    mkdir -p "$path" || return 1
+
+    if [[ "$1" = "set" ]]; then
         [ -n "$2" ] || kc_shm_fail "Missing key for set." || return 1
         [ -n "${3+x}" ] || kc_shm_fail "Missing value for set." || return 1
-        echo "$3" > "$file"
+        value="$3"
+        printf '%s\n' "$value" > "$file"
         return 0
     fi
 
-    if [ "$1" = "get" ]; then
+    if [[ "$1" = "get" ]]; then
         [ -n "$2" ] || kc_shm_fail "Missing key for get." || return 1
         [ -f "$file" ] && cat "$file"
         return 0
     fi
 
-    if [ "$1" = "del" ]; then
+    if [[ "$1" = "del" ]]; then
         [ -n "$2" ] || kc_shm_fail "Missing key for del." || return 1
         [ -f "$file" ] && rm -f "$file"
         return 0
     fi
 
-    kc_shm_fail "Unknown command."
+    if [ -t 0 ]; then
+        kc_shm_fail "Missing input for key."
+        return 1
+    fi
+
+    cat > "$file"
+    return 0
+}
+
+# List stored keys.
+# @param $1 Base path
+# @return 0 on success, 1 on failure.
+ls_keys() {
+    local path
+    local file
+
+    path="$1"
+    [ -d "$path" ] || return 1
+
+    for file in "$path"/*; do
+        [ -e "$file" ] || return 0
+        [ -f "$file" ] || continue
+        basename "$file"
+    done
+    return 0
 }
 
 main "$@"
