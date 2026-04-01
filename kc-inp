@@ -1,0 +1,158 @@
+#!/bin/bash
+# kc-inp - Standard input delegator
+# Summary: Read one input payload from stdin and delegate it to a command.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+
+KC_INP_DEFAULT_END=''
+
+# Print help text.
+# @return 0 Always returns success.
+kc_inp_help() {
+    echo "Options:"
+    echo "  <command>   Command to execute with stdin"
+    echo "  -e <char>   End input on character"
+    echo "  -h          Show help"
+    echo
+    echo "Examples:"
+    echo "  echo 'hello' | kc-inp cat"
+    echo "  kc-inp 'chulengo infer' -e \$'\004'"
+}
+
+# Print an error message and help.
+# @param $1 Error message.
+# @return 1 Always returns failure.
+kc_inp_fail() {
+    echo "Error: $1" >&2
+    kc_inp_help >&2
+    return 1
+}
+
+# Check whether stdin capture uses an end token.
+# @param $1 End token.
+# @return 0 If set, 1 otherwise.
+kc_inp_has_end() {
+    [ -n "$1" ]
+}
+
+# Read one line from stdin.
+# @return 0 Returns success, 1 on EOF.
+kc_inp_read_line() {
+    local line
+
+    IFS= read -r line || return 1
+    printf '%s' "$line"
+    return 0
+}
+
+# Read stdin until an end token.
+# @param $1 End token.
+# @return 0 Always returns success.
+kc_inp_read_end() {
+    local end
+    local line
+    local payload=''
+
+    end=$1
+
+    while IFS= read -r line; do
+        if [ "$line" = "$end" ]; then
+            break
+        fi
+
+        payload+="$line"$'\n'
+    done
+
+    payload=${payload%$'\n'}
+    printf '%s' "$payload"
+    return 0
+}
+
+# Read one input payload from stdin.
+# @param $1 End token.
+# @return 0 Returns success, 1 on line mode EOF.
+kc_inp_read() {
+    if kc_inp_has_end "$1"; then
+        kc_inp_read_end "$1"
+        return 0
+    fi
+
+    kc_inp_read_line
+}
+
+# Delegate one payload to the selected command.
+# @param $1 End token.
+# @param $2 Command string.
+# @return 0 Returns delegated command status.
+kc_inp_delegate() {
+    local end
+    local cmd
+    local payload
+
+    end=$1
+    cmd=$2
+
+    [ -n "$cmd" ] || {
+        kc_inp_fail 'Missing command.'
+        return 1
+    }
+
+    payload=$(kc_inp_read "$end") || return 0
+    printf '%s' "$payload" | bash -lc "$cmd"
+}
+
+# Run the command entrypoint.
+# @param $@ CLI arguments.
+# @return 0 Exits successfully on delegated success, 1 on failure.
+main() {
+    local cmd=''
+    local end=$KC_INP_DEFAULT_END
+
+    [ $# -gt 0 ] || {
+        kc_inp_fail 'Missing command.'
+        return 1
+    }
+
+    case "$1" in
+        -h|--help)
+            kc_inp_help
+            return 0
+            ;;
+    esac
+
+    cmd=$1
+    shift
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                kc_inp_help
+                return 0
+                ;;
+            -e|--end)
+                shift || {
+                    kc_inp_fail 'Missing value for -e.'
+                    return 1
+                }
+                end=$1
+                ;;
+            *)
+                kc_inp_fail 'Unknown argument.'
+                return 1
+                ;;
+        esac
+
+        shift
+    done
+
+    kc_inp_delegate "$end" "$cmd" || {
+        kc_inp_fail 'Command failed.'
+        return 1
+    }
+
+    return 0
+}
+
+main "$@"

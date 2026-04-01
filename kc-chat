@@ -1,0 +1,238 @@
+#!/bin/bash
+# kc-chat - Chat loop delegator
+# Summary: Repeatedly read input from stdin and delegate it to a command.
+#
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: GNU GPL v3.0
+
+KC_CHAT_DEFAULT_END=''
+KC_CHAT_DEFAULT_EXIT='exit'
+KC_CHAT_DEFAULT_MSG=''
+KC_CHAT_DEFAULT_PROMPT='> '
+
+# Print help text.
+# @return 0 Always returns success.
+kc_chat_help() {
+    echo "Options:"
+    echo "  <command>   Command to execute with stdin"
+    echo "  -e <char>   End input on character"
+    echo "  -x <text>   Exit command"
+    echo "  -m <text>   Initial message"
+    echo "  -p <text>   Prompt text"
+    echo "  -h          Show help"
+    echo
+    echo "Examples:"
+    echo "  kc-chat cat"
+    echo "  kc-chat cat -e \$'\004'"
+    echo "  kc-chat cat -x quit"
+    echo "  kc-chat cat -m \$'\e[2mchat ready\e[0m'"
+    echo "  kc-chat cat -p '>>> '"
+}
+
+# Print an error message and help.
+# @param $1 Error message.
+# @return 1 Always returns failure.
+kc_chat_fail() {
+    echo "Error: $1" >&2
+    kc_chat_help >&2
+    return 1
+}
+
+# Print the initial message.
+# @param $1 Message text.
+# @return 0 Always returns success.
+kc_chat_msg() {
+    [ -n "$1" ] || return 0
+    printf '%b\n' "$1"
+}
+
+# Print the prompt text.
+# @param $1 Prompt text.
+# @return 0 Always returns success.
+kc_chat_prompt() {
+    printf '%b' "$1"
+}
+
+# Check whether input capture uses an end token.
+# @param $1 End token.
+# @return 0 If set, 1 otherwise.
+kc_chat_has_end() {
+    [ -n "$1" ]
+}
+
+# Check whether input matches the exit command.
+# @param $1 Payload text.
+# @param $2 Exit command.
+# @return 0 If payload matches, 1 otherwise.
+kc_chat_is_exit() {
+    [ "$1" = "$2" ]
+}
+
+# Read one line from stdin.
+# @return 0 Returns success, 1 on EOF.
+kc_chat_read_line() {
+    local line
+
+    IFS= read -r line || return 1
+    printf '%s' "$line"
+    return 0
+}
+
+# Read stdin until an end token.
+# @param $1 End token.
+# @return 0 Returns success, 1 on EOF before data.
+kc_chat_read_end() {
+    local end
+    local line
+    local payload=''
+    local has_data=0
+
+    end=$1
+
+    while IFS= read -r line; do
+        if [ "$line" = "$end" ]; then
+            break
+        fi
+
+        payload+="$line"$'\n'
+        has_data=1
+    done
+
+    [ "$has_data" -eq 1 ] || return 1
+
+    payload=${payload%$'\n'}
+    printf '%s' "$payload"
+    return 0
+}
+
+# Read one input payload from stdin.
+# @param $1 End token.
+# @return 0 Returns success, 1 on EOF.
+kc_chat_read() {
+    if kc_chat_has_end "$1"; then
+        kc_chat_read_end "$1"
+        return $?
+    fi
+
+    kc_chat_read_line
+}
+
+# Delegate one payload to the selected command.
+# @param $1 Payload text.
+# @param $2 Command string.
+# @return 0 Returns delegated command status.
+kc_chat_delegate() {
+    local payload
+    local cmd
+
+    payload=$1
+    cmd=$2
+
+    printf '%s' "$payload" | bash -lc "$cmd"
+}
+
+# Run one chat turn.
+# @param $1 Command string.
+# @param $2 End token.
+# @param $3 Exit command.
+# @return 0 Returns success, 1 on EOF or exit request.
+kc_chat_turn() {
+    local cmd
+    local end
+    local exit_cmd
+    local payload
+
+    cmd=$1
+    end=$2
+    exit_cmd=$3
+
+    payload=$(kc_chat_read "$end") || return 1
+
+    if ! kc_chat_has_end "$end" && kc_chat_is_exit "$payload" "$exit_cmd"; then
+        return 1
+    fi
+
+    kc_chat_delegate "$payload" "$cmd"
+}
+
+# Run the command entrypoint.
+# @param $@ CLI arguments.
+# @return 0 Exits successfully on delegated success, 1 on failure.
+main() {
+    local cmd=''
+    local end=$KC_CHAT_DEFAULT_END
+    local exit_cmd=$KC_CHAT_DEFAULT_EXIT
+    local msg=$KC_CHAT_DEFAULT_MSG
+    local prompt=$KC_CHAT_DEFAULT_PROMPT
+
+    [ $# -gt 0 ] || {
+        kc_chat_fail 'Missing command.'
+        return 1
+    }
+
+    case "$1" in
+        -h|--help)
+            kc_chat_help
+            return 0
+            ;;
+    esac
+
+    cmd=$1
+    shift
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                kc_chat_help
+                return 0
+                ;;
+            -e|--end)
+                shift || {
+                    kc_chat_fail 'Missing value for -e.'
+                    return 1
+                }
+                end=$1
+                ;;
+            -x|--exit)
+                shift || {
+                    kc_chat_fail 'Missing value for -x.'
+                    return 1
+                }
+                exit_cmd=$1
+                ;;
+            -m|--msg)
+                shift || {
+                    kc_chat_fail 'Missing value for -m.'
+                    return 1
+                }
+                msg=$1
+                ;;
+            -p|--prompt)
+                shift || {
+                    kc_chat_fail 'Missing value for -p.'
+                    return 1
+                }
+                prompt=$1
+                ;;
+            *)
+                kc_chat_fail 'Unknown argument.'
+                return 1
+                ;;
+        esac
+
+        shift
+    done
+
+    kc_chat_msg "$msg"
+
+    while true; do
+        kc_chat_prompt "$prompt"
+        kc_chat_turn "$cmd" "$end" "$exit_cmd" || break
+        printf '\n'
+    done
+
+    return 0
+}
+
+main "$@"
