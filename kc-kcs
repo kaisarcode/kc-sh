@@ -619,6 +619,7 @@ collect_artifacts() {
         fi
         if [ -d "$arg" ]; then
             find "$arg" -mindepth 1 \
+                \( -type d \( -path '*/lib/inc' -o -path '*/lib/obj' -o -path '*/vendor' -o -path '*/vendors' -o -path '*/third_party' -o -path '*/third-party' \) \) -prune -o \
                 \( -type d -name '.*' -o -type f -name '.*' \) -prune -o \
                 -type f -print0
         fi
