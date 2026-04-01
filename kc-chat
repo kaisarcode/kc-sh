@@ -24,9 +24,9 @@ kc_chat_help() {
     echo
     echo "Examples:"
     echo "  kc-chat cat"
-    echo "  kc-chat cat -e \$'\004'"
+    printf "%s\n" "  kc-chat cat -e \$'\004'"
     echo "  kc-chat cat -x quit"
-    echo "  kc-chat cat -m \$'\e[2mchat ready\e[0m'"
+    printf "%s\n" "  kc-chat cat -m \$'\e[2mchat ready\e[0m'"
     echo "  kc-chat cat -p '>>> '"
 }
 

@@ -18,7 +18,7 @@ kc_inp_help() {
     echo
     echo "Examples:"
     echo "  echo 'hello' | kc-inp cat"
-    echo "  kc-inp 'chulengo infer' -e \$'\004'"
+    printf "%s\n" "  kc-inp 'chulengo infer' -e \$'\004'"
 }
 
 # Print an error message and help.
