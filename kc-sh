@@ -12,29 +12,29 @@
 #   -h                  Show help
 
 # Examples:
-#   kc-run shm set mykey hello
-#   kc-run shm get mykey
-#   kc-run shm ls
+#   kc-sh shm set mykey hello
+#   kc-sh shm get mykey
+#   kc-sh shm ls
 
 # Prints application usage help.
 # @return 0 on success.
-kc_run_help() {
+kc_sh_help() {
     echo "Options:"
     echo "  <tool> [args...]    Run kc-<tool> from the real script directory"
     echo "  -h                  Show help"
     echo
     echo "Examples:"
-    echo "  kc-run shm set mykey hello"
-    echo "  kc-run shm get mykey"
-    echo "  kc-run shm ls"
+    echo "  kc-sh shm set mykey hello"
+    echo "  kc-sh shm get mykey"
+    echo "  kc-sh shm ls"
 }
 
 # Prints one error and the help text to standard error.
 # @param $1 Error message
 # @return 1 on failure.
-kc_run_fail() {
+kc_sh_fail() {
     echo "Error: $1" >&2
-    kc_run_help >&2
+    kc_sh_help >&2
     return 1
 }
 
@@ -46,7 +46,7 @@ main() {
     local cmd
 
     if [[ "$1" = "-h" || "$1" = "--help" || -z "$1" ]]; then
-        kc_run_help
+        kc_sh_help
         [ -n "$1" ]
         return $?
     fi
@@ -56,7 +56,7 @@ main() {
     cmd="$1"
     shift
 
-    [ -x "$root/kc-$cmd" ] || kc_run_fail "Unknown tool: $cmd" || return 1
+    [ -x "$root/kc-$cmd" ] || kc_sh_fail "Unknown tool: $cmd" || return 1
     "$root/kc-$cmd" "$@"
 }
 
