@@ -30,7 +30,7 @@ kc_run_help() {
     echo "  kc-run shm set mykey hello"
     echo "  kc-run shm get mykey"
     echo "  kc-run dmn ls"
-    echo "  kc-run -i foo"
+    echo "  kc-run -i shm"
 }
 
 # Prints one error and the help text to standard error.
