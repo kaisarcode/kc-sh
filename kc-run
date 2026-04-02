@@ -8,7 +8,8 @@
 # License: GNU GPL v3.0
 
 # Options:
-#   -i                  Install tool from GitHub if missing locally
+#   -i                  Install kc-run to /usr/local/bin
+#   -u                  Uninstall kc-run from /usr/local/bin
 #   <tool> [args...]    Run kc-<tool> from the real script directory
 #   -h                  Show help
 
@@ -16,21 +17,24 @@
 #   kc-run shm set mykey hello
 #   kc-run shm get mykey
 #   kc-run shm ls
-#   kc-run -i shm
+#   kc-run -i
+#   kc-run -u
 
 # Prints application usage help.
 # @return 0 on success.
 kc_run_help() {
     echo "Options:"
-    echo "  -i                  Install tool from GitHub if missing locally"
+    echo "  -i                  Install kc-run to /usr/local/bin"
+    echo "  -u                  Uninstall kc-run from /usr/local/bin"
     echo "  <tool> [args...]    Run kc-<tool> from the real script directory"
     echo "  -h                  Show help"
     echo
     echo "Examples:"
     echo "  kc-run shm set mykey hello"
     echo "  kc-run shm get mykey"
-    echo "  kc-run dmn ls"
-    echo "  kc-run -i shm"
+    echo "  kc-run shm ls"
+    echo "  kc-run -i"
+    echo "  kc-run -u"
 }
 
 # Prints one error and the help text to standard error.
@@ -48,12 +52,6 @@ main() {
     local self
     local root
     local cmd
-    local install=0
-
-    if [[ "$1" = "-i" ]]; then
-        install=1
-        shift
-    fi
 
     if [[ "$1" = "-h" || "$1" = "--help" || -z "$1" ]]; then
         kc_run_help
@@ -62,21 +60,30 @@ main() {
     fi
 
     self="$(readlink -f "$0")"
+
+    if [[ "$1" = "-i" ]]; then
+        if sudo ln -sf "$self" /usr/local/bin/kc-run; then
+            echo "Installed kc-run to /usr/local/bin/kc-run"
+            return 0
+        else
+            echo "Failed to install kc-run" >&2
+            return 1
+        fi
+    elif [[ "$1" = "-u" ]]; then
+        if sudo rm -f /usr/local/bin/kc-run; then
+            echo "Uninstalled kc-run from /usr/local/bin/kc-run"
+            return 0
+        else
+            echo "Failed to uninstall kc-run" >&2
+            return 1
+        fi
+    fi
+
     root="$(dirname "$self")"
     cmd="$1"
     shift
 
-    if [ ! -x "$root/kc-$cmd" ]; then
-        if [ "$install" -eq 1 ]; then
-            if ! curl -sSfL "https://raw.githubusercontent.com/kaisarcode/kc-sh/refs/heads/master/kc-$cmd" -o "$root/kc-$cmd"; then
-                rm -f "$root/kc-$cmd"
-                kc_run_fail "Unknown tool: $cmd" || return 1
-            fi
-            chmod +x "$root/kc-$cmd"
-        else
-            kc_run_fail "Unknown tool: $cmd" || return 1
-        fi
-    fi
+    [ -x "$root/kc-$cmd" ] || kc_run_fail "Unknown tool: $cmd" || return 1
     "$root/kc-$cmd" "$@"
 }
 
