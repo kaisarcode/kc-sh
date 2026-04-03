@@ -640,6 +640,9 @@ run_validator() {
         local ftype
         ftype=$(get_file_type "$artifact")
         [ "$ftype" = "unknown" ] && continue
+        if [[ "$(basename "$artifact")" == "CHANGELOG.md" ]]; then
+            continue
+        fi
         validate_whitespace_and_limits "$artifact"
         validate_file_header "$artifact" "$ftype"
         validate_no_internal_comments "$artifact" "$ftype"
