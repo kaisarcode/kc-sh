@@ -18,15 +18,16 @@
 # Prints application usage help.
 # @return 0 on success.
 kc_venv_help() {
-    printf 'Usage: kc venv <directory>\n'
+    printf 'Usage: kc-venv [options] [init] <directory>\n'
     printf '\n'
     printf 'Options:\n'
     printf '  <directory>    Directory to activate as the virtual environment root\n'
-    printf '  -h             Show help\n'
+    printf '  init           Initialize a new environment in an empty directory\n'
+    printf '  -h, --help     Show help\n'
     printf '\n'
     printf 'Examples:\n'
-    printf '  kc venv ./my-env\n'
-    printf '  kc venv /opt/envs/my-project\n'
+    printf '  kc-venv ./my-env\n'
+    printf '  kc-venv init ./new-env\n'
 }
 
 # Prints one error message to standard error and exits.
@@ -56,6 +57,13 @@ kc_venv_detect_platform() {
         Darwin) printf 'darwin\n' ;;
         *)      printf '%s\n' "$(uname -s | tr '[:upper:]' '[:lower:]')" ;;
     esac
+}
+
+# Checks if a directory is empty.
+# @param $1 Directory path.
+# @return 0 if empty, 1 otherwise.
+kc_venv_is_empty() {
+    [ -z "$(ls -A "$1" 2>/dev/null)" ]
 }
 
 # Ensures one directory exists.
@@ -139,22 +147,54 @@ kc_venv_activate() {
 # @param $@ Script arguments.
 # @return 0 on success, 1 on failure.
 main() {
+    local root_path=''
     local root
     local arch
     local platform
+    local init=0
 
-    if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-        kc_venv_help
-        return 0
+    if [ "$1" = 'init' ]; then
+        init=1
+        shift
     fi
 
-    [ -n "$1" ] || kc_venv_fail "No directory given." || return 1
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                kc_venv_help
+                return 0
+                ;;
+            -*)
+                kc_venv_fail "Unknown option: $1" || return 1
+                ;;
+            *)
+                if [ -z "$root_path" ]; then
+                    root_path="$1"
+                else
+                    kc_venv_fail "Unexpected argument: $1" || return 1
+                fi
+                ;;
+        esac
+        shift
+    done
 
-    root="$(realpath "$1")" || kc_venv_fail "Cannot resolve path: $1" || return 1
+    [ -n "$root_path" ] || kc_venv_fail "No directory given." || return 1
+
+    if [ "$init" -eq 1 ]; then
+        kc_venv_dir_ensure "$root_path" || kc_venv_fail "Could not create: $root_path" || return 1
+        kc_venv_is_empty "$root_path" || kc_venv_fail "Directory is not empty: $root_path" || return 1
+    else
+        [ -d "$root_path" ] || kc_venv_fail "Directory does not exist: $root_path (use --init to create)" || return 1
+    fi
+
+    root="$(realpath "$root_path")" || kc_venv_fail "Cannot resolve path: $root_path" || return 1
     arch="$(kc_venv_detect_arch)"
     platform="$(kc_venv_detect_platform)"
 
-    kc_venv_root_prepare "$root" "$arch" "$platform" || kc_venv_fail "Failed to prepare environment." || return 1
+    if [ "$init" -eq 1 ]; then
+        kc_venv_root_prepare "$root" "$arch" "$platform" || kc_venv_fail "Failed to prepare environment." || return 1
+    fi
+
     kc_venv_activate "$root" "$arch" "$platform" || kc_venv_fail "Failed to activate environment." || return 1
 }
 

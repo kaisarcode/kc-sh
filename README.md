@@ -41,8 +41,8 @@ export PATH="$PATH:/home/kaisar/Work/kc-sh"
 
 ### Virtual Environments
 ```bash
-# Create and enter an isolated environment
-kc-sh venv ./my-project-env
+# Create and initialize a new isolated environment
+kc-sh venv init ./my-project-env
 ```
 
 ### Shared Memory store
