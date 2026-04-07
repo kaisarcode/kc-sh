@@ -5,6 +5,57 @@
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
+#
+# Environment layout:
+# - <root>/bin
+#   Base directory for executables.
+# - <root>/bin/<arch>/<platform>
+#   Active executable directory added to PATH.
+# - <root>/lib
+#   Base directory for libraries grouped by package.
+# - <root>/lib/<name>/<arch>/<platform>
+#   Active library directories added to LIBRARY_PATH and LD_LIBRARY_PATH.
+# - <root>/tmp
+#   Temporary directory exposed through TMPDIR.
+# - <root>/run
+#   Runtime directory exposed through XDG_RUNTIME_DIR.
+# - <root>/.config
+#   XDG configuration directory.
+# - <root>/.cache
+#   XDG cache directory.
+# - <root>/.local/share
+#   XDG data directory.
+# - <root>/.local/state
+#   XDG state directory.
+# - <root>/.sudo_as_admin_successful
+#   Compatibility file for interactive shells and tools expecting a sudo marker.
+#
+# Canonical architectures:
+# - x86_64
+# - x86
+# - aarch64
+# - armv7
+# - riscv64
+# - riscv32
+# - ppc64le
+# - ppc64
+#
+# Canonical platforms:
+# - linux
+# - android
+# - macos
+# - windows
+# - freebsd
+# - openbsd
+# - netbsd
+# - solaris
+#
+# Notes:
+# - The environment root also acts as HOME.
+# - Architecture aliases are normalized to canonical directory names when possible.
+# - Platform aliases are normalized to canonical directory names when possible.
+# - Architecture and platform directories are resolved at activation time.
+# - The init command creates only the base directory structure.
 
 # Prints application usage help.
 # @return 0 on success.
@@ -17,11 +68,11 @@ kc_venv_help() {
     printf '  -h, --help     Show help\n'
     printf '\n'
     printf 'Examples:\n'
-    printf '  kc-venv ./my-env\n'
-    printf '  kc-venv init ./new-env\n'
+    printf '  kc-venv ./env\n'
+    printf '  kc-venv init ./env\n'
 }
 
-# Prints one error message to standard error and exits.
+# Prints one error message to standard error.
 # @param $1 Error message.
 # @return 1 on failure.
 kc_venv_fail() {
@@ -30,23 +81,71 @@ kc_venv_fail() {
 }
 
 # Detects the host CPU architecture.
-# @return Prints the architecture string on success.
+# @return Prints the architecture string.
 kc_venv_detect_arch() {
     case "$(uname -m)" in
-        x86_64)  printf 'x86_64\n' ;;
-        aarch64) printf 'aarch64\n' ;;
-        armv7l)  printf 'armv7l\n' ;;
-        *)       printf '%s\n' "$(uname -m)" ;;
+        x86_64|amd64)
+            printf 'x86_64\n'
+            ;;
+        i386|i486|i586|i686|x86)
+            printf 'x86\n'
+            ;;
+        aarch64|arm64)
+            printf 'aarch64\n'
+            ;;
+        armv7l|armv7|arm)
+            printf 'armv7\n'
+            ;;
+        riscv64)
+            printf 'riscv64\n'
+            ;;
+        riscv32)
+            printf 'riscv32\n'
+            ;;
+        ppc64le)
+            printf 'ppc64le\n'
+            ;;
+        ppc64)
+            printf 'ppc64\n'
+            ;;
+        *)
+            printf '%s\n' "$(uname -m)"
+            ;;
     esac
 }
 
 # Detects the host platform.
-# @return Prints the platform string on success.
+# @return Prints the platform string.
 kc_venv_detect_platform() {
     case "$(uname -s)" in
-        Linux)  printf 'linux\n' ;;
-        Darwin) printf 'darwin\n' ;;
-        *)      printf '%s\n' "$(uname -s | tr '[:upper:]' '[:lower:]')" ;;
+        Linux)
+            if [ -f /system/build.prop ] || [ -d /data/data ]; then
+                printf 'android\n'
+            else
+                printf 'linux\n'
+            fi
+            ;;
+        Darwin)
+            printf 'macos\n'
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            printf 'windows\n'
+            ;;
+        FreeBSD)
+            printf 'freebsd\n'
+            ;;
+        OpenBSD)
+            printf 'openbsd\n'
+            ;;
+        NetBSD)
+            printf 'netbsd\n'
+            ;;
+        SunOS)
+            printf 'solaris\n'
+            ;;
+        *)
+            printf '%s\n' "$(uname -s | tr '[:upper:]' '[:lower:]')"
+            ;;
     esac
 }
 
@@ -57,42 +156,67 @@ kc_venv_is_empty() {
     [ -z "$(ls -A "$1" 2>/dev/null)" ]
 }
 
-# Ensures one directory exists.
+# Ensures a directory exists.
 # @param $1 Directory path.
-# @return 0 on success or negative on failure.
+# @return 0 on success, 1 on failure.
 kc_venv_dir_ensure() {
     [ -d "$1" ] && return 0
     mkdir -p "$1"
 }
 
-# Prepares the virtual environment directory structure.
+# Resolves a path to its absolute canonical form.
+# @param $1 Input path.
+# @return Prints the resolved path on success, 1 on failure.
+kc_venv_realpath() {
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$1"
+        return $?
+    fi
+
+    python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
+
+# Collects active library directories for one architecture and platform.
+# Summary: Scans lib/*/<arch>/<platform> and prints a colon-separated path list.
 # @param $1 Root path.
 # @param $2 Architecture.
 # @param $3 Platform.
-# @return 0 on success or 1 on failure.
-kc_venv_root_prepare() {
+# @return Prints the library path list on success.
+kc_venv_collect_lib_paths() {
     local root="$1"
     local arch="$2"
     local platform="$3"
+    local dir=''
+    local paths=''
+
+    for dir in "$root"/lib/*/"$arch"/"$platform"; do
+        [ -d "$dir" ] || continue
+        paths="${paths:+$paths:}$dir"
+    done
+
+    printf '%s\n' "$paths"
+}
+
+# Prepares the base virtual environment directory structure.
+# @param $1 Root path.
+# @return 0 on success, 1 on failure.
+kc_venv_root_prepare() {
+    local root="$1"
 
     kc_venv_dir_ensure "$root" || return 1
     kc_venv_dir_ensure "$root/bin" || return 1
     kc_venv_dir_ensure "$root/lib" || return 1
-    kc_venv_dir_ensure "$root/etc" || return 1
-    kc_venv_dir_ensure "$root/etc/xdg" || return 1
     kc_venv_dir_ensure "$root/tmp" || return 1
-    kc_venv_dir_ensure "$root/var" || return 1
     kc_venv_dir_ensure "$root/run" || return 1
-    kc_venv_dir_ensure "$root/share" || return 1
-    kc_venv_dir_ensure "$root/bin/$arch/$platform" || return 1
-    kc_venv_dir_ensure "$root/lib/$arch/$platform" || return 1
-    kc_venv_dir_ensure "$root/lib/include/$arch/$platform" || return 1
-    kc_venv_dir_ensure "$root/lib/pkgconfig/$arch/$platform" || return 1
-
-    touch "$root/.sudo_as_admin_successful"
+    kc_venv_dir_ensure "$root/.config" || return 1
+    kc_venv_dir_ensure "$root/.cache" || return 1
+    kc_venv_dir_ensure "$root/.local/share" || return 1
+    kc_venv_dir_ensure "$root/.local/state" || return 1
+    chmod 700 "$root/run" 2>/dev/null || true
+    : > "$root/.sudo_as_admin_successful"
 }
 
-# Activates the virtual environment in the current shell process.
+# Activates the virtual environment in one interactive shell.
 # @param $1 Root path.
 # @param $2 Architecture.
 # @param $3 Platform.
@@ -102,50 +226,62 @@ kc_venv_activate() {
     local arch="$2"
     local platform="$3"
     local arch_dir="$arch/$platform"
-    local shell="${SHELL:-/bin/sh}"
+    local shell_path="${SHELL:-/bin/sh}"
+    local lib_paths=''
+
+    lib_paths="$(kc_venv_collect_lib_paths "$root" "$arch" "$platform")" || return 1
 
     HOME="$root"
     TMPDIR="$root/tmp"
-    PWD="$root"
+
     KC_VENV=1
     KC_VENV_ROOT="$root"
     KC_VENV_ARCH="$arch"
     KC_VENV_PLATFORM="$platform"
-    SHELL="$shell"
-    PATH="$root/bin:$root/bin/$arch_dir:$PATH"
-    LIBRARY_PATH="$root/lib:$root/lib/$arch_dir${LIBRARY_PATH:+:$LIBRARY_PATH}"
-    LD_LIBRARY_PATH="$root/lib:$root/lib/$arch_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    C_INCLUDE_PATH="$root/lib/include:$root/lib/include/$arch_dir${C_INCLUDE_PATH:+:$C_INCLUDE_PATH}"
-    CPLUS_INCLUDE_PATH="$root/lib/include:$root/lib/include/$arch_dir${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
-    PKG_CONFIG_PATH="$root/lib/pkgconfig:$root/lib/pkgconfig/$arch_dir${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+
+    PATH="$root/bin:$root/bin/$arch_dir${PATH:+:$PATH}"
+
+    if [ -n "$lib_paths" ]; then
+        LIBRARY_PATH="$lib_paths${LIBRARY_PATH:+:$LIBRARY_PATH}"
+        LD_LIBRARY_PATH="$lib_paths${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fi
+
     XDG_CONFIG_HOME="$root/.config"
     XDG_CACHE_HOME="$root/.cache"
     XDG_DATA_HOME="$root/.local/share"
     XDG_STATE_HOME="$root/.local/state"
     XDG_RUNTIME_DIR="$root/run"
-    XDG_CONFIG_DIRS="$root/etc/xdg"
-    XDG_DATA_DIRS="$root/share"
 
-    export HOME TMPDIR PWD KC_VENV KC_VENV_ROOT KC_VENV_ARCH KC_VENV_PLATFORM
-    export SHELL PATH LIBRARY_PATH LD_LIBRARY_PATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
-    export PKG_CONFIG_PATH XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME
-    export XDG_STATE_HOME XDG_RUNTIME_DIR XDG_CONFIG_DIRS XDG_DATA_DIRS
+    export HOME
+    export TMPDIR
+    export KC_VENV
+    export KC_VENV_ROOT
+    export KC_VENV_ARCH
+    export KC_VENV_PLATFORM
+    export PATH
+    [ -n "${LIBRARY_PATH+x}" ] && export LIBRARY_PATH
+    [ -n "${LD_LIBRARY_PATH+x}" ] && export LD_LIBRARY_PATH
+    export XDG_CONFIG_HOME
+    export XDG_CACHE_HOME
+    export XDG_DATA_HOME
+    export XDG_STATE_HOME
+    export XDG_RUNTIME_DIR
 
     cd "$root" || return 1
-    exec "$shell" -i
+    exec "$shell_path" -i
 }
 
-# Runs the kc-venv runtime entry point.
+# Runs the program entry point.
 # @param $@ Script arguments.
 # @return 0 on success, 1 on failure.
 main() {
     local root_path=''
-    local root
-    local arch
-    local platform
+    local root=''
+    local arch=''
+    local platform=''
     local init=0
 
-    if [ "$1" = 'init' ]; then
+    if [ "${1:-}" = 'init' ]; then
         init=1
         shift
     fi
@@ -170,24 +306,24 @@ main() {
         shift
     done
 
-    [ -n "$root_path" ] || kc_venv_fail "No directory given." || return 1
+    [ -n "$root_path" ] || kc_venv_fail 'No directory given.' || return 1
 
     if [ "$init" -eq 1 ]; then
         kc_venv_dir_ensure "$root_path" || kc_venv_fail "Could not create: $root_path" || return 1
         kc_venv_is_empty "$root_path" || kc_venv_fail "Directory is not empty: $root_path" || return 1
     else
-        [ -d "$root_path" ] || kc_venv_fail "Directory does not exist: $root_path (use --init to create)" || return 1
+        [ -d "$root_path" ] || kc_venv_fail "Directory does not exist: $root_path (use init to create)" || return 1
     fi
 
-    root="$(realpath "$root_path")" || kc_venv_fail "Cannot resolve path: $root_path" || return 1
+    root="$(kc_venv_realpath "$root_path")" || kc_venv_fail "Cannot resolve path: $root_path" || return 1
     arch="$(kc_venv_detect_arch)"
     platform="$(kc_venv_detect_platform)"
 
     if [ "$init" -eq 1 ]; then
-        kc_venv_root_prepare "$root" "$arch" "$platform" || kc_venv_fail "Failed to prepare environment." || return 1
+        kc_venv_root_prepare "$root" || kc_venv_fail 'Failed to prepare environment.' || return 1
     fi
 
-    kc_venv_activate "$root" "$arch" "$platform" || kc_venv_fail "Failed to activate environment." || return 1
+    kc_venv_activate "$root" "$arch" "$platform" || kc_venv_fail 'Failed to activate environment.' || return 1
 }
 
 main "$@"
