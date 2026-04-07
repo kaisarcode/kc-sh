@@ -1,0 +1,159 @@
+#!/bin/bash
+
+# kc-venv - Virtual Environment.
+# Summary: Activates a directory as a virtual environment root.
+
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: https://www.gnu.org/licenses/gpl-3.0.html
+
+# Options:
+#   <directory>    Directory to activate as the virtual environment root
+#   -h             Show help
+
+# Examples:
+#   hipe ./my-env
+#   hipe /opt/envs/my-project
+
+# Prints application usage help.
+# @return 0 on success.
+hipe_help() {
+    printf 'Usage: hipe <directory>\n'
+    printf '\n'
+    printf 'Options:\n'
+    printf '  <directory>    Directory to activate as the virtual environment root\n'
+    printf '  -h             Show help\n'
+    printf '\n'
+    printf 'Examples:\n'
+    printf '  hipe ./my-env\n'
+    printf '  hipe /opt/envs/my-project\n'
+}
+
+# Prints one error message to standard error and exits.
+# @param $1 Error message.
+# @return 1 on failure.
+hipe_fail() {
+    printf 'hipe: error: %s\n' "$1" >&2
+    return 1
+}
+
+# Detects the host CPU architecture.
+# @return Prints the architecture string on success.
+hipe_detect_arch() {
+    case "$(uname -m)" in
+        x86_64)  printf 'x86_64\n' ;;
+        aarch64) printf 'aarch64\n' ;;
+        armv7l)  printf 'armv7l\n' ;;
+        *)       printf '%s\n' "$(uname -m)" ;;
+    esac
+}
+
+# Detects the host platform.
+# @return Prints the platform string on success.
+hipe_detect_platform() {
+    case "$(uname -s)" in
+        Linux)  printf 'linux\n' ;;
+        Darwin) printf 'darwin\n' ;;
+        *)      printf '%s\n' "$(uname -s | tr '[:upper:]' '[:lower:]')" ;;
+    esac
+}
+
+# Ensures one directory exists.
+# @param $1 Directory path.
+# @return 0 on success or negative on failure.
+hipe_dir_ensure() {
+    [ -d "$1" ] && return 0
+    mkdir -p "$1"
+}
+
+# Prepares the virtual environment directory structure.
+# @param $1 Root path.
+# @param $2 Architecture.
+# @param $3 Platform.
+# @return 0 on success or 1 on failure.
+hipe_root_prepare() {
+    local root="$1"
+    local arch="$2"
+    local platform="$3"
+
+    hipe_dir_ensure "$root" || return 1
+    hipe_dir_ensure "$root/bin" || return 1
+    hipe_dir_ensure "$root/lib" || return 1
+    hipe_dir_ensure "$root/etc" || return 1
+    hipe_dir_ensure "$root/etc/xdg" || return 1
+    hipe_dir_ensure "$root/tmp" || return 1
+    hipe_dir_ensure "$root/var" || return 1
+    hipe_dir_ensure "$root/run" || return 1
+    hipe_dir_ensure "$root/share" || return 1
+    hipe_dir_ensure "$root/opt/arch/$arch/$platform/bin" || return 1
+    hipe_dir_ensure "$root/opt/arch/$arch/$platform/lib" || return 1
+}
+
+# Activates the virtual environment in the current shell process.
+# @param $1 Root path.
+# @param $2 Architecture.
+# @param $3 Platform.
+# @return Does not return on success, 1 on failure.
+hipe_activate() {
+    local root="$1"
+    local arch="$2"
+    local platform="$3"
+    local branch="$root/opt/arch/$arch/$platform"
+    local shell="${SHELL:-/bin/sh}"
+
+    HOME="$root"
+    TMPDIR="$root/tmp"
+    PWD="$root"
+    HIPE=1
+    HIPE_ROOT="$root"
+    HIPE_ARCH="$arch"
+    HIPE_PLATFORM="$platform"
+    HIPE_BRANCH="$branch"
+    SHELL="$shell"
+    PATH="$root/bin:$branch/bin:$PATH"
+    LIBRARY_PATH="$root/lib:$branch/lib"
+    LD_LIBRARY_PATH="$root/lib:$branch/lib"
+    C_INCLUDE_PATH="$root/lib/include:$branch/lib/include"
+    CPLUS_INCLUDE_PATH="$root/lib/include:$branch/lib/include"
+    PKG_CONFIG_PATH="$root/lib/pkgconfig:$branch/lib/pkgconfig"
+    XDG_CONFIG_HOME="$root/.config"
+    XDG_CACHE_HOME="$root/.cache"
+    XDG_DATA_HOME="$root/.local/share"
+    XDG_STATE_HOME="$root/.local/state"
+    XDG_RUNTIME_DIR="$root/run"
+    XDG_CONFIG_DIRS="$root/etc/xdg"
+    XDG_DATA_DIRS="$root/share"
+
+    export HOME TMPDIR PWD HIPE HIPE_ROOT HIPE_ARCH HIPE_PLATFORM HIPE_BRANCH
+    export SHELL PATH LIBRARY_PATH LD_LIBRARY_PATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
+    export PKG_CONFIG_PATH XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME
+    export XDG_STATE_HOME XDG_RUNTIME_DIR XDG_CONFIG_DIRS XDG_DATA_DIRS
+
+    cd "$root" || return 1
+    exec "$shell" -i
+}
+
+# Runs the HIPE runtime entry point.
+# @param $@ Script arguments.
+# @return 0 on success, 1 on failure.
+main() {
+    local root
+    local arch
+    local platform
+
+    if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+        hipe_help
+        return 0
+    fi
+
+    [ -n "$1" ] || hipe_fail "No directory given." || return 1
+
+    root="$(realpath "$1")" || hipe_fail "Cannot resolve path: $1" || return 1
+    arch="$(hipe_detect_arch)"
+    platform="$(hipe_detect_platform)"
+
+    hipe_root_prepare "$root" "$arch" "$platform" || hipe_fail "Failed to prepare environment." || return 1
+    hipe_activate "$root" "$arch" "$platform" || hipe_fail "Failed to activate environment." || return 1
+}
+
+main "$@"
