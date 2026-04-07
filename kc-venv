@@ -2,18 +2,9 @@
 
 # kc-venv - Virtual Environment.
 # Summary: Activates a directory as a virtual environment root.
-
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
-
-# Options:
-#   <directory>    Directory to activate as the virtual environment root
-#   -h             Show help
-
-# Examples:
-#   hipe ./my-env
-#   hipe /opt/envs/my-project
 
 # Prints application usage help.
 # @return 0 on success.
@@ -114,11 +105,11 @@ kc_venv_activate() {
     HOME="$root"
     TMPDIR="$root/tmp"
     PWD="$root"
-    HIPE=1
-    HIPE_ROOT="$root"
-    HIPE_ARCH="$arch"
-    HIPE_PLATFORM="$platform"
-    HIPE_BRANCH="$branch"
+    KC_VENV=1
+    KC_VENV_ROOT="$root"
+    KC_VENV_ARCH="$arch"
+    KC_VENV_PLATFORM="$platform"
+    KC_VENV_BRANCH="$branch"
     SHELL="$shell"
     PATH="$root/bin:$branch/bin:$PATH"
     LIBRARY_PATH="$root/lib:$branch/lib"
@@ -134,7 +125,7 @@ kc_venv_activate() {
     XDG_CONFIG_DIRS="$root/etc/xdg"
     XDG_DATA_DIRS="$root/share"
 
-    export HOME TMPDIR PWD HIPE HIPE_ROOT HIPE_ARCH HIPE_PLATFORM HIPE_BRANCH
+    export HOME TMPDIR PWD KC_VENV KC_VENV_ROOT KC_VENV_ARCH KC_VENV_PLATFORM KC_VENV_BRANCH
     export SHELL PATH LIBRARY_PATH LD_LIBRARY_PATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
     export PKG_CONFIG_PATH XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME
     export XDG_STATE_HOME XDG_RUNTIME_DIR XDG_CONFIG_DIRS XDG_DATA_DIRS
@@ -143,7 +134,7 @@ kc_venv_activate() {
     exec "$shell" -i
 }
 
-# Runs the HIPE runtime entry point.
+# Runs the kc-venv runtime entry point.
 # @param $@ Script arguments.
 # @return 0 on success, 1 on failure.
 main() {

@@ -1,7 +1,6 @@
 #!/bin/bash
 # kc-chat - Chat loop delegator
 # Summary: Repeatedly read input from stdin and delegate it to a command.
-#
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html

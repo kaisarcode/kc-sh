@@ -1,16 +1,9 @@
 #!/bin/bash
-
 # kc-tpm - Text Profile Matcher
 # Summary: Emits a 0 to 1 match score against a text map.
-
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
-
-# Options:
-#   <map>    Path to text map file
-#   -n <n>   N-gram size (default 3)
-#   -h       Show help
 
 # Examples:
 #  

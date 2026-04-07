@@ -1,29 +1,9 @@
 #!/bin/bash
 # kc-kcs - KaisarCode Standards Validator
 # Summary: Validates KaisarCode files against formatting and standards rules.
-
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
-
-# Options:
-#   -type <t>       Force file type: sh|shell|c|cpp|php|md
-#   <file|dir>...   Validate one or more files or directories
-
-# Supported file types:
-#   Shell
-#   C / C++
-#   PHP
-#   Markdown
-
-# Examples:
-#   kc-kcs -type shell ./script.txt
-#   kc-kcs ./script.sh
-#   kc-kcs ./README.md
-#   kc-kcs .
-
-# Dependencies:
-#   ShellCheck
 
 set -e
 set -o pipefail

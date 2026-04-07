@@ -1,17 +1,9 @@
 #!/bin/bash
-
 # kc-ngr - N-Gram Generator
 # Summary: Shell implementation of descending sliding-window n-grams.
-
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
-
-# Options:
-#   -max <n>   Maximum tokens per block (default 10)
-#   -min <n>   Minimum tokens per block (default 1)
-#   -sep <s>   Custom separator characters (default spaces/newlines)
-#   -h         Show help
 
 # Prints application usage help.
 # @return 0 on success.

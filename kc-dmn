@@ -1,31 +1,9 @@
 #!/bin/bash
-
 # kc-dmn: A simple Unix socket manager for daemonized commands.
 # Summary: Registers read commands and writes values through local daemon sockets in XDG_RUNTIME_DIR.
-
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
-
-# Options:
-#   get <key> <command> Register daemonized command for key
-#   set <key> <value>   Write value to registered daemon key
-#   fl <key>            Print daemon socket file path
-#   del <key>           Remove daemon key and kill registered process if it exists
-#   ls                  List registered daemon keys
-#   <key>               Write standard input to registered daemon key
-#   -h                  Show help
-
-# Examples:
-#   kc-dmn get myservice /bin/cat
-#   kc-dmn set myservice hello
-#   kc-dmn fl myservice
-#   echo "Hello, World!" | kc-dmn myservice
-#   kc-dmn del myservice
-#   kc-dmn ls
-
-# Dependencies:
-#   socat
 
 # Prints application usage help.
 # @return 0 on success.

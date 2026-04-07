@@ -1,28 +1,9 @@
 #!/bin/bash
-
 # Shared-memory key/value helper.
 # Summary: Stores, reads, and removes values from /dev/shm/kc-shm.
-
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
-
-# Options:
-#   set <key> <value>   Write value to shared memory
-#   get <key>           Read value from shared memory
-#   fl <key>            Print shared memory file path
-#   del <key>           Remove shared memory if it exists
-#   ls                  List registered shared memorys
-#   <key>               Write standard input to shared memory
-#   -h                  Show help
-
-# Examples:
-#   kc-shm set mykey hello
-#   kc-shm get mykey
-#   kc-shm fl mykey
-#   echo hello | kc-shm mykey
-#   kc-shm del mykey
-#   kc-shm ls
 
 # Prints application usage help.
 # @return 0 on success.

@@ -1,22 +1,9 @@
 #!/bin/bash
-
 # Watch and notifies folders and file changes
 # Summary: Emits add, upd, and del events for files and directories.
-
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
-
-# Options:
-#   <path>   Path to folder or file
-#   -h       Show help
-
-# Examples:
-#   kc-wch .
-#   kc-wch ./file.txt
-
-# Dependencies:
-#   inotifywait   Provided by inotify-tools
 
 declare -A known_paths=()
 

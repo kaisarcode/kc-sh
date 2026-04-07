@@ -1,20 +1,9 @@
 #!/bin/bash
-
 # KC tool dispatcher.
 # Summary: Runs kc-sh tools from the current script directory.
-
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
-
-# Options:
-#   <tool> [args...]    Run kc-<tool> from the real script directory
-#   -h                  Show help
-
-# Examples:
-#   kc-sh shm set mykey hello
-#   kc-sh shm get mykey
-#   kc-sh shm ls
 
 # Prints application usage help.
 # @return 0 on success.
