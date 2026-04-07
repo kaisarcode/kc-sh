@@ -368,7 +368,12 @@ validate_markdown_rules() {
     local file_path="$1"
     local h1_count
     local footer
-    h1_count=$(grep -c '^# ' "$file_path" || true)
+    h1_count=$(awk '
+        /^```/ { in_fence = !in_fence; next }
+        in_fence { next }
+        /^# / { count++ }
+        END { print count + 0 }
+    ' "$file_path")
     if [ "$h1_count" -ne 1 ]; then
         fail "$file_path: Markdown files must contain exactly one H1."
     fi
