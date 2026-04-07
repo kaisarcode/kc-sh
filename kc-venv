@@ -84,8 +84,10 @@ kc_venv_root_prepare() {
     kc_venv_dir_ensure "$root/var" || return 1
     kc_venv_dir_ensure "$root/run" || return 1
     kc_venv_dir_ensure "$root/share" || return 1
-    kc_venv_dir_ensure "$root/opt/arch/$arch/$platform/bin" || return 1
-    kc_venv_dir_ensure "$root/opt/arch/$arch/$platform/lib" || return 1
+    kc_venv_dir_ensure "$root/bin/$arch/$platform" || return 1
+    kc_venv_dir_ensure "$root/lib/$arch/$platform" || return 1
+    kc_venv_dir_ensure "$root/lib/include/$arch/$platform" || return 1
+    kc_venv_dir_ensure "$root/lib/pkgconfig/$arch/$platform" || return 1
 
     touch "$root/.sudo_as_admin_successful"
 }
@@ -99,7 +101,7 @@ kc_venv_activate() {
     local root="$1"
     local arch="$2"
     local platform="$3"
-    local branch="$root/opt/arch/$arch/$platform"
+    local arch_dir="$arch/$platform"
     local shell="${SHELL:-/bin/sh}"
 
     HOME="$root"
@@ -109,14 +111,13 @@ kc_venv_activate() {
     KC_VENV_ROOT="$root"
     KC_VENV_ARCH="$arch"
     KC_VENV_PLATFORM="$platform"
-    KC_VENV_BRANCH="$branch"
     SHELL="$shell"
-    PATH="$root/bin:$branch/bin:$PATH"
-    LIBRARY_PATH="$root/lib:$branch/lib"
-    LD_LIBRARY_PATH="$root/lib:$branch/lib"
-    C_INCLUDE_PATH="$root/lib/include:$branch/lib/include"
-    CPLUS_INCLUDE_PATH="$root/lib/include:$branch/lib/include"
-    PKG_CONFIG_PATH="$root/lib/pkgconfig:$branch/lib/pkgconfig"
+    PATH="$root/bin:$root/bin/$arch_dir:$PATH"
+    LIBRARY_PATH="$root/lib:$root/lib/$arch_dir${LIBRARY_PATH:+:$LIBRARY_PATH}"
+    LD_LIBRARY_PATH="$root/lib:$root/lib/$arch_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    C_INCLUDE_PATH="$root/lib/include:$root/lib/include/$arch_dir${C_INCLUDE_PATH:+:$C_INCLUDE_PATH}"
+    CPLUS_INCLUDE_PATH="$root/lib/include:$root/lib/include/$arch_dir${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+    PKG_CONFIG_PATH="$root/lib/pkgconfig:$root/lib/pkgconfig/$arch_dir${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
     XDG_CONFIG_HOME="$root/.config"
     XDG_CACHE_HOME="$root/.cache"
     XDG_DATA_HOME="$root/.local/share"
@@ -125,7 +126,7 @@ kc_venv_activate() {
     XDG_CONFIG_DIRS="$root/etc/xdg"
     XDG_DATA_DIRS="$root/share"
 
-    export HOME TMPDIR PWD KC_VENV KC_VENV_ROOT KC_VENV_ARCH KC_VENV_PLATFORM KC_VENV_BRANCH
+    export HOME TMPDIR PWD KC_VENV KC_VENV_ROOT KC_VENV_ARCH KC_VENV_PLATFORM
     export SHELL PATH LIBRARY_PATH LD_LIBRARY_PATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
     export PKG_CONFIG_PATH XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME
     export XDG_STATE_HOME XDG_RUNTIME_DIR XDG_CONFIG_DIRS XDG_DATA_DIRS
