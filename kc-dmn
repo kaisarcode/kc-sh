@@ -8,14 +8,16 @@
 # Prints application usage help.
 # @return 0 on success.
 kc_dmn_help() {
+    echo "Usage: kc-dmn [options] <action> [args...]"
+    echo
     echo "Options:"
-    echo "  get <key> <command> Register daemonized command for key"
-    echo "  set <key> <value>   Write value to registered daemon key"
-    echo "  fl <key>            Print daemon socket file path"
-    echo "  del <key>           Remove daemon key and kill registered process if it exists"
-    echo "  ls                  List registered daemon keys"
-    echo "  <key>               Write standard input to registered daemon key"
-    echo "  -h                  Show help"
+    echo "  get <key> <command>  Register daemonized command for key"
+    echo "  set <key> <value>    Write value to registered daemon key"
+    echo "  fl <key>             Print daemon socket file path"
+    echo "  del <key>            Remove daemon key and kill registered process if it exists"
+    echo "  ls                   List registered daemon keys"
+    echo "  <key>                Write standard input to registered daemon key"
+    echo "  -h, --help           Show help"
     echo
     echo "Examples:"
     echo "  kc-dmn get myservice /bin/cat"

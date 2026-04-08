@@ -11,10 +11,12 @@ set -o pipefail
 # Prints application usage help.
 # @return 0 on success.
 kc_kcs_help() {
+    echo "Usage: kc-kcs [options] <file|dir>..."
+    echo
     echo "Options:"
-    echo "  -type <t>       Force file type: sh|shell|c|cpp|php|md"
-    echo "  <file|dir>...   Validate one or more files or directories"
-    echo "  -h              Show help"
+    echo "  -type <t>        Force file type: sh|shell|c|cpp|php|md"
+    echo "  <file|dir>...    Validate one or more files or directories"
+    echo "  -h, --help       Show help"
     echo
     echo "Supported file types:"
     echo "  Shell"

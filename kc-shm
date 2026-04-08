@@ -8,14 +8,16 @@
 # Prints application usage help.
 # @return 0 on success.
 kc_shm_help() {
+    echo "Usage: kc-shm [options] <action> [args...]"
+    echo
     echo "Options:"
-    echo "  set <key> <value>   Write value to shared memory"
-    echo "  get <key>           Read value from shared memory"
-    echo "  fl <key>            Print shared memory file path"
-    echo "  del <key>           Remove shared memory if it exists"
-    echo "  ls                  List registered shared memorys"
-    echo "  <key>               Write standard input to shared memory"
-    echo "  -h                  Show help"
+    echo "  set <key> <value>    Write value to shared memory"
+    echo "  get <key>            Read value from shared memory"
+    echo "  fl <key>             Print shared memory file path"
+    echo "  del <key>            Remove shared memory if it exists"
+    echo "  ls                   List registered shared memory keys"
+    echo "  <key>                Write standard input to shared memory"
+    echo "  -h, --help           Show help"
     echo
     echo "Examples:"
     echo "  kc-shm set mykey hello"

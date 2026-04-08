@@ -13,13 +13,15 @@ KC_CHAT_DEFAULT_PROMPT='> '
 # Print help text.
 # @return 0 Always returns success.
 kc_chat_help() {
+    echo "Usage: kc-chat [options] <command>"
+    echo
     echo "Options:"
-    echo "  <command>   Command to execute with stdin"
-    echo "  -e <char>   End input on character"
-    echo "  -x <text>   Exit command"
-    echo "  -m <text>   Initial message"
-    echo "  -p <text>   Prompt text"
-    echo "  -h          Show help"
+    echo "  <command>      Command to execute with stdin"
+    echo "  -e <char>      End input on character"
+    echo "  -x <text>      Exit command"
+    echo "  -m <text>      Initial message"
+    echo "  -p <text>      Prompt text"
+    echo "  -h, --help     Show help"
     echo
     echo "Examples:"
     echo "  kc-chat cat"

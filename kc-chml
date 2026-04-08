@@ -11,16 +11,15 @@ set -o pipefail
 # Prints application usage details.
 # @return 0 on success.
 kc_chml_help() {
-    echo "Usage:"
-    echo "    kc-chml [--role system|assistant|user]"
-    echo
-    echo "Description:"
-    echo "    Reads from standard input and wraps the payload as one ChatML"
-    echo "    message."
+    echo "Usage: kc-chml [options]"
     echo
     echo "Options:"
-    echo "    --role ROLE    Message role: system, assistant, or user."
-    echo "    -h, --help     Show this help message."
+    echo "  -r, --role ROLE    Message role: system, assistant, or user"
+    echo "  -h, --help         Show help"
+    echo
+    echo "Examples:"
+    echo "  echo 'Hola' | kc-chml"
+    echo "  echo 'You are a bot.' | kc-chml --role system"
 }
 
 # Prints an error message to standard error.

@@ -8,14 +8,16 @@
 # Prints application usage help.
 # @return 0 on success.
 kc_fifo_help() {
+    echo "Usage: kc-fifo [options] <action> [args...]"
+    echo
     echo "Options:"
-    echo "  set <key> <value>   Write value to FIFO key"
-    echo "  get <key>           Read value from FIFO key"
-    echo "  fl <key>            Print FIFO file path"
-    echo "  del <key>           Remove FIFO key if it exists"
-    echo "  ls                  List registered FIFO keys"
-    echo "  <key>               Write standard input to FIFO key"
-    echo "  -h                  Show help"
+    echo "  set <key> <value>    Write value to FIFO key"
+    echo "  get <key>            Read value from FIFO key"
+    echo "  fl <key>             Print FIFO file path"
+    echo "  del <key>            Remove FIFO key if it exists"
+    echo "  ls                   List registered FIFO keys"
+    echo "  <key>                Write standard input to FIFO key"
+    echo "  -h, --help           Show help"
     echo
     echo "Examples:"
     echo "  kc-fifo set mypipe hello"

@@ -10,9 +10,11 @@ declare -A known_paths=()
 # Prints application usage help.
 # @return 0 on success.
 kc_wch_help() {
+    echo "Usage: kc-wch [options] <path>"
+    echo
     echo "Options:"
-    echo "  <path>   Path to folder or file"
-    echo "  -h       Show help"
+    echo "  <path>         Path to folder or file"
+    echo "  -h, --help     Show help"
     echo
     echo "Examples:"
     echo "  kc-wch ."

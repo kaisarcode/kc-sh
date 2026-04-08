@@ -10,10 +10,12 @@ KC_INP_DEFAULT_END=''
 # Print help text.
 # @return 0 Always returns success.
 kc_inp_help() {
+    echo "Usage: kc-inp [options] <command>"
+    echo
     echo "Options:"
-    echo "  <command>   Command to execute with stdin"
-    echo "  -e <char>   End input on character"
-    echo "  -h          Show help"
+    echo "  <command>      Command to execute with stdin"
+    echo "  -e <char>      End input on character"
+    echo "  -h, --help     Show help"
     echo
     echo "Examples:"
     echo "  echo 'hello' | kc-inp cat"

@@ -35,10 +35,12 @@
 # Prints application usage help.
 # @return 0 on success.
 kc_tpm_help() {
+    echo "Usage: kc-tpm [options] <map>"
+    echo
     echo "Options:"
-    echo "  <map>    Path to text map file"
-    echo "  -n <n>   N-gram size (default 3)"
-    echo "  -h       Show help"
+    echo "  <map>          Path to text map file"
+    echo "  -n <n>         N-gram size (default 3)"
+    echo "  -h, --help     Show help"
     echo
     echo "Examples:"
     echo "  echo \"Hola cómo estás?\" | kc-tpm es.map"

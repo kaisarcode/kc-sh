@@ -8,11 +8,17 @@
 # Prints application usage help.
 # @return 0 on success.
 kc_ngr_help() {
+    echo "Usage: kc-ngr [options]"
+    echo
     echo "Options:"
-    echo "  -max <n>   Maximum tokens per block (default 10)"
-    echo "  -min <n>   Minimum tokens per block (default 1)"
-    echo "  -sep <s>   Custom separator characters (default spaces/newlines)"
-    echo "  -h         Show help"
+    echo "  -max <n>       Maximum tokens per block (default 10)"
+    echo "  -min <n>       Minimum tokens per block (default 1)"
+    echo "  -sep <s>       Custom separator characters (default spaces/newlines)"
+    echo "  -h, --help     Show help"
+    echo
+    echo "Examples:"
+    echo "  echo 'one two three' | kc-ngr"
+    echo "  echo 'one two three' | kc-ngr -max 2 -min 1"
 }
 
 # Prints one error and the help text to standard error.
