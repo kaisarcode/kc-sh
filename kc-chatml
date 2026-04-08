@@ -1,0 +1,96 @@
+#!/bin/bash
+# kc-chml - Wraps standard input in a single ChatML message.
+# Summary: Reads one stdin payload and emits one valid ChatML message.
+# Author: KaisarCode
+# Website: https://kaisarcode.com
+# License: https://www.gnu.org/licenses/gpl-3.0.html
+
+set -e
+set -o pipefail
+
+# Prints application usage details.
+# @return 0 on success.
+kc_chml_help() {
+    echo "Usage:"
+    echo "    kc-chml [--role system|assistant|user]"
+    echo
+    echo "Description:"
+    echo "    Reads from standard input and wraps the payload as one ChatML"
+    echo "    message."
+    echo
+    echo "Options:"
+    echo "    --role ROLE    Message role: system, assistant, or user."
+    echo "    -h, --help     Show this help message."
+}
+
+# Prints an error message to standard error.
+# @param $1 Error message.
+# @return 1 on failure.
+kc_chml_fail() {
+    echo "Error: $1" >&2
+    return 1
+}
+
+# Validates one role value.
+# @param $1 Role name.
+# @return 0 on success, 1 on failure.
+kc_chml_validate_role() {
+    case "$1" in
+        system|assistant|user)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+# Parses command line options.
+# @param $@ Full CLI argument list.
+# @return 0 on success, 1 on failure.
+kc_chml_parse_args() {
+    KC_CHML_ROLE="user"
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -r|--role)
+                [ "$#" -ge 2 ] || kc_chml_fail "--role requires a value"
+                kc_chml_validate_role "$2" \
+                    || kc_chml_fail "Invalid role: $2"
+                KC_CHML_ROLE="$2"
+                shift 2
+                ;;
+            -h|--help)
+                kc_chml_help
+                exit 0
+                ;;
+            *)
+                kc_chml_fail "Unknown argument: $1"
+                ;;
+        esac
+    done
+}
+
+# Reads the full stdin payload.
+# @return 0 on success.
+kc_chml_read_stdin() {
+    KC_CHML_CONTENT=$(cat)
+}
+
+# Emits one ChatML message.
+# @return 0 on success.
+kc_chml_render() {
+    printf '<|im_start|>%s\n%s\n<|im_end|>\n' \
+        "$KC_CHML_ROLE" \
+        "$KC_CHML_CONTENT"
+}
+
+# Runs the application.
+# @param $@ Full CLI argument list.
+# @return 0 on success.
+main() {
+    kc_chml_parse_args "$@"
+    kc_chml_read_stdin
+    kc_chml_render
+}
+
+main "$@"

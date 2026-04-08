@@ -16,6 +16,7 @@ KaisarCode shell utilities.
 | **`kc-wch`** | File watcher emitting `add`, `upd`, `del`. |
 | **`kc-fifo`** | Named pipe (FIFO) manager. |
 | **`kc-chat`** | Interactive loop delegator for subprocesses. |
+| **`kc-chml`** |  Wraps standard input in a single ChatML message. |
 | **`kc-inp`** | Standard input handler. |
 | **`kc-kcs`** | Workspace validation tool. |
 | **`kc-ngr`** | N-gram generator. |
