@@ -1,0 +1,602 @@
+#!/bin/sh
+# kc-env - KaisarCode Runtime Configuration.
+# Summary: Activates one directory as a virtual environment in the current shell or one child shell.
+# Author:  KaisarCode
+# Website: https://kaisarcode.com
+# License: https://www.gnu.org/licenses/gpl-3.0.html
+#
+# Layout: bin, lib, tmp, run, .config, .cache, .local/share, .local/state.
+# Architectures: x86_64, x86, aarch64, armv7, riscv64, riscv32, ppc64le, ppc64.
+# Platforms: linux, android, macos, windows, freebsd, openbsd, netbsd, solaris.
+
+# Detects the host CPU architecture.
+# @param None.
+# @return Prints the architecture string.
+kc_env_detect_arch() (
+    case "$(uname -m)" in
+        x86_64|amd64)
+            printf 'x86_64\n'
+            ;;
+        i386|i486|i586|i686|x86)
+            printf 'x86\n'
+            ;;
+        aarch64|arm64)
+            printf 'aarch64\n'
+            ;;
+        armv7l|armv7|arm)
+            printf 'armv7\n'
+            ;;
+        riscv64)
+            printf 'riscv64\n'
+            ;;
+        riscv32)
+            printf 'riscv32\n'
+            ;;
+        ppc64le)
+            printf 'ppc64le\n'
+            ;;
+        ppc64)
+            printf 'ppc64\n'
+            ;;
+        *)
+            printf '%s\n' "$(uname -m)"
+            ;;
+    esac
+)
+
+# Detects the host platform.
+# @param None.
+# @return Prints the platform string.
+kc_env_detect_platform() (
+    case "$(uname -s)" in
+        Linux)
+            if [ -f /system/build.prop ] || [ -d /data/data ]; then
+                printf 'android\n'
+                return 0
+            fi
+            printf 'linux\n'
+            ;;
+        Darwin)
+            printf 'macos\n'
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            printf 'windows\n'
+            ;;
+        FreeBSD)
+            printf 'freebsd\n'
+            ;;
+        OpenBSD)
+            printf 'openbsd\n'
+            ;;
+        NetBSD)
+            printf 'netbsd\n'
+            ;;
+        SunOS)
+            printf 'solaris\n'
+            ;;
+        *)
+            printf '%s\n' "$(uname -s | tr '[:upper:]' '[:lower:]')"
+            ;;
+    esac
+)
+
+# Checks whether one name is one canonical architecture.
+# @param $1 Directory name.
+# @return 0 if known, 1 otherwise.
+kc_env_is_known_arch() (
+    case "$1" in
+        x86_64|x86|aarch64|armv7|riscv64|riscv32|ppc64le|ppc64)
+            return 0
+            ;;
+    esac
+
+    return 1
+)
+
+# Checks whether one name is one canonical platform.
+# @param $1 Directory name.
+# @return 0 if known, 1 otherwise.
+kc_env_is_known_platform() (
+    case "$1" in
+        linux|android|macos|windows|freebsd|openbsd|netbsd|solaris)
+            return 0
+            ;;
+    esac
+
+    return 1
+)
+
+# Checks whether one path list already contains one directory.
+# @param $1 Colon-separated path list.
+# @param $2 Directory path.
+# @return 0 if found, 1 otherwise.
+kc_env_path_list_contains() (
+    kc_env_plc_list=$1
+    kc_env_plc_needle=$2
+    kc_env_plc_old_ifs=$IFS
+    kc_env_plc_entry=
+
+    IFS=':'
+
+    for kc_env_plc_entry in $kc_env_plc_list; do
+        if [ "$kc_env_plc_entry" = "$kc_env_plc_needle" ]; then
+            IFS=$kc_env_plc_old_ifs
+            return 0
+        fi
+    done
+
+    IFS=$kc_env_plc_old_ifs
+    return 1
+)
+
+# Appends one directory to one path list without duplicates.
+# @param $1 Colon-separated path list.
+# @param $2 Directory path.
+# @return Prints the updated path list.
+kc_env_path_list_append() (
+    kc_env_pla_list=$1
+    kc_env_pla_value=$2
+
+    if [ -z "$kc_env_pla_value" ]; then
+        printf '%s\n' "$kc_env_pla_list"
+        return 0
+    fi
+
+    if kc_env_path_list_contains "$kc_env_pla_list" "$kc_env_pla_value"; then
+        printf '%s\n' "$kc_env_pla_list"
+        return 0
+    fi
+
+    if [ -n "$kc_env_pla_list" ]; then
+        printf '%s:%s\n' "$kc_env_pla_list" "$kc_env_pla_value"
+        return 0
+    fi
+
+    printf '%s\n' "$kc_env_pla_value"
+)
+
+# Checks whether one directory contributes to path discovery.
+# @param $1 Directory path.
+# @return 0 if it has entries, 1 otherwise.
+kc_env_dir_has_payload() (
+    kc_env_dhp_dir_path=$1
+    kc_env_dhp_path=
+
+    [ -d "$kc_env_dhp_dir_path" ] || return 1
+
+    for kc_env_dhp_path in "$kc_env_dhp_dir_path"/*; do
+        [ -e "$kc_env_dhp_path" ] && return 0
+    done
+
+    return 1
+)
+
+# Discovers one architecture branch in top-down order.
+# @param $1 Architecture directory path.
+# @param $2 Host platform.
+# @param $3 Current path list.
+# @return Prints the updated path list.
+kc_env_discover_arch_branch() (
+    kc_env_dab_arch_dir=$1
+    kc_env_dab_host_platform=$2
+    kc_env_dab_list=$3
+    kc_env_dab_child=
+    kc_env_dab_name=
+    kc_env_dab_namespace_children=
+    kc_env_dab_platform_child=
+
+    [ -d "$kc_env_dab_arch_dir" ] || {
+        printf '%s\n' "$kc_env_dab_list"
+        return 0
+    }
+
+    if kc_env_dir_has_payload "$kc_env_dab_arch_dir"; then
+        kc_env_dab_list=$(kc_env_path_list_append "$kc_env_dab_list" "$kc_env_dab_arch_dir") || return 1
+    fi
+
+    for kc_env_dab_child in "$kc_env_dab_arch_dir"/*; do
+        [ -d "$kc_env_dab_child" ] || continue
+        kc_env_dab_name=${kc_env_dab_child##*/}
+
+        if kc_env_is_known_platform "$kc_env_dab_name"; then
+            if [ "$kc_env_dab_name" = "$kc_env_dab_host_platform" ]; then
+                kc_env_dab_platform_child=$kc_env_dab_child
+            fi
+            continue
+        fi
+
+        if kc_env_is_known_arch "$kc_env_dab_name"; then
+            continue
+        fi
+
+        kc_env_dab_namespace_children="${kc_env_dab_namespace_children}
+$kc_env_dab_child"
+    done
+
+    while IFS= read -r kc_env_dab_child || [ -n "$kc_env_dab_child" ]; do
+        [ -n "$kc_env_dab_child" ] || continue
+        kc_env_dab_list=$(kc_env_discover_tree \
+            "$kc_env_dab_child" \
+            '' \
+            "$kc_env_dab_host_platform" \
+            "$kc_env_dab_list") || return 1
+    done <<EOF
+$kc_env_dab_namespace_children
+EOF
+
+    if [ -n "$kc_env_dab_platform_child" ]; then
+        if kc_env_dir_has_payload "$kc_env_dab_platform_child"; then
+            kc_env_dab_list=$(kc_env_path_list_append "$kc_env_dab_list" "$kc_env_dab_platform_child") || return 1
+        fi
+    fi
+
+    printf '%s\n' "$kc_env_dab_list"
+)
+
+# Discovers one directory tree in top-down order.
+# @param $1 Directory path.
+# @param $2 Host architecture.
+# @param $3 Host platform.
+# @param $4 Current path list.
+# @return Prints the updated path list.
+kc_env_discover_tree() (
+    kc_env_dt_dir_path=$1
+    kc_env_dt_host_arch=$2
+    kc_env_dt_host_platform=$3
+    kc_env_dt_list=$4
+    kc_env_dt_child=
+    kc_env_dt_name=
+    kc_env_dt_namespace_children=
+    kc_env_dt_arch_child=
+
+    [ -d "$kc_env_dt_dir_path" ] || {
+        printf '%s\n' "$kc_env_dt_list"
+        return 0
+    }
+
+    if kc_env_dir_has_payload "$kc_env_dt_dir_path"; then
+        kc_env_dt_list=$(kc_env_path_list_append "$kc_env_dt_list" "$kc_env_dt_dir_path") || return 1
+    fi
+
+    for kc_env_dt_child in "$kc_env_dt_dir_path"/*; do
+        [ -d "$kc_env_dt_child" ] || continue
+        kc_env_dt_name=${kc_env_dt_child##*/}
+
+        if kc_env_is_known_arch "$kc_env_dt_name"; then
+            if [ "$kc_env_dt_name" = "$kc_env_dt_host_arch" ]; then
+                kc_env_dt_arch_child=$kc_env_dt_child
+            fi
+            continue
+        fi
+
+        if kc_env_is_known_platform "$kc_env_dt_name"; then
+            continue
+        fi
+
+        kc_env_dt_namespace_children="${kc_env_dt_namespace_children}
+$kc_env_dt_child"
+    done
+
+    while IFS= read -r kc_env_dt_child || [ -n "$kc_env_dt_child" ]; do
+        [ -n "$kc_env_dt_child" ] || continue
+        kc_env_dt_list=$(kc_env_discover_tree \
+            "$kc_env_dt_child" \
+            "$kc_env_dt_host_arch" \
+            "$kc_env_dt_host_platform" \
+            "$kc_env_dt_list") || return 1
+    done <<EOF
+$kc_env_dt_namespace_children
+EOF
+
+    if [ -n "$kc_env_dt_arch_child" ]; then
+        kc_env_dt_list=$(kc_env_discover_arch_branch \
+            "$kc_env_dt_arch_child" \
+            "$kc_env_dt_host_platform" \
+            "$kc_env_dt_list") || return 1
+    fi
+
+    printf '%s\n' "$kc_env_dt_list"
+)
+
+# Collects environment executable directories.
+# @param $1 Root path.
+# @param $2 Host architecture.
+# @param $3 Host platform.
+# @return Prints one colon-separated path list.
+kc_env_collect_bin_paths() (
+    kc_env_cbp_root_path=$1
+    kc_env_cbp_host_arch=$2
+    kc_env_cbp_host_platform=$3
+
+    kc_env_discover_tree "$kc_env_cbp_root_path/bin" "$kc_env_cbp_host_arch" "$kc_env_cbp_host_platform" ''
+)
+
+# Collects environment library directories.
+# @param $1 Root path.
+# @param $2 Host architecture.
+# @param $3 Host platform.
+# @return Prints one colon-separated path list.
+kc_env_collect_lib_paths() (
+    kc_env_clp_root_path=$1
+    kc_env_clp_host_arch=$2
+    kc_env_clp_host_platform=$3
+
+    kc_env_discover_tree "$kc_env_clp_root_path/lib" "$kc_env_clp_host_arch" "$kc_env_clp_host_platform" ''
+)
+
+# Prints application usage help.
+# @return 0 on success.
+kc_env_help() {
+    printf 'Usage: kc-rc [options] [root]\n'
+    printf '\n'
+    printf 'Options:\n'
+    printf '  [root]         Project one environment root directory\n'
+    printf '  -h, --help     Show help\n'
+    printf '\n'
+    printf 'Examples:\n'
+    printf '  kc-rc\n'
+    printf '  kc-rc ./env\n'
+    printf '  . ./kc-rc ./env\n'
+}
+
+# Prints one error message to standard error.
+# @param $1 Error message.
+# @return 1 on failure.
+kc_env_fail() {
+    printf 'kc-rc: error: %s\n' "$1" >&2
+    return 1
+}
+
+# Resolves one environment root directory.
+# @param $1 Optional root path.
+# @return Prints the canonical root path.
+kc_env_resolve_root() (
+    kc_env_rr_input_path=$1
+
+    if [ -n "$kc_env_rr_input_path" ]; then
+        if [ ! -d "$kc_env_rr_input_path" ]; then
+            kc_env_fail "Not one directory: $kc_env_rr_input_path" >&2
+            return 1
+        fi
+
+        cd "$kc_env_rr_input_path" || return 1
+        pwd -P
+        return 0
+    fi
+
+    pwd -P
+)
+
+# Checks whether the script is sourced by the current shell.
+# @param None.
+# @return 0 if sourced, 1 otherwise.
+kc_env_is_sourced() {
+    if [ -n "${ZSH_EVAL_CONTEXT:-}" ]; then
+        case "$ZSH_EVAL_CONTEXT" in
+            *:file)
+                return 0
+                ;;
+        esac
+    fi
+
+    if [ -n "${BASH_VERSION:-}" ] && [ -n "${BASH_SOURCE:-}" ]; then
+        if [ "$BASH_SOURCE" != "$0" ]; then
+            return 0
+        fi
+    fi
+
+    case "${0##*/}" in
+        sh|dash|bash|rbash|ash|ksh|mksh|zsh|-sh|-dash|-bash|-rbash|-ash|-ksh|-mksh|-zsh)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+# Resolves the shell executable to spawn for executable mode.
+# @param None.
+# @return Prints the shell path.
+kc_env_resolve_shell() {
+    if [ -n "${SHELL:-}" ] && [ -x "${SHELL:-}" ]; then
+        printf '%s\n' "$SHELL"
+        return 0
+    fi
+
+    if [ -n "${SHELL:-}" ]; then
+        kc_env_rs_candidate=$(command -v "${SHELL##*/}" 2>/dev/null) || kc_env_rs_candidate=''
+
+        if [ -n "$kc_env_rs_candidate" ]; then
+            printf '%s\n' "$kc_env_rs_candidate"
+            return 0
+        fi
+    fi
+
+    kc_env_rs_candidate=$(command -v sh 2>/dev/null) || kc_env_rs_candidate='/bin/sh'
+    printf '%s\n' "$kc_env_rs_candidate"
+}
+
+# Spawns one interactive shell with the current environment.
+# @param None.
+# @return Does not return on success.
+kc_env_spawn_shell() {
+    cd "$ROOT" || return 1
+
+    KC_ENV_SHELL="$(kc_env_resolve_shell)" || return 1
+
+    case "${KC_ENV_SHELL##*/}" in
+        sh|dash|bash|rbash|ash|ksh|mksh|zsh)
+            exec "$KC_ENV_SHELL" -i
+            ;;
+    esac
+
+    exec "$KC_ENV_SHELL"
+}
+
+# Captures the current host paths after removing one previous environment layer.
+# @param None.
+# @return 0 on success.
+kc_env_capture_host_paths() {
+    if [ -n "${KC_ENV_PATH:-}" ] && [ -n "${KC_HOST_PATH:-}" ]; then
+        PATH="$KC_HOST_PATH"
+    fi
+
+    if [ -n "${KC_ENV_LIBRARY_PATH:-}" ]; then
+        LIBRARY_PATH="${KC_HOST_LIBRARY_PATH:-${LIBRARY_PATH:-}}"
+        LD_LIBRARY_PATH="${KC_HOST_LD_LIBRARY_PATH:-${LD_LIBRARY_PATH:-}}"
+    fi
+
+    KC_HOST_PATH="$PATH"
+    KC_HOST_LIBRARY_PATH="${LIBRARY_PATH:-}"
+    KC_HOST_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
+
+    export KC_HOST_PATH
+    export KC_HOST_LIBRARY_PATH
+    export KC_HOST_LD_LIBRARY_PATH
+
+    return 0
+}
+
+# Applies one default environment layout to the current shell.
+# @param None.
+# @return 0 on success.
+kc_env_apply_defaults() {
+    HOME="$ROOT"
+    XDG_CONFIG_HOME="$ROOT/.config"
+    XDG_CACHE_HOME="$ROOT/.cache"
+    XDG_DATA_HOME="$ROOT/.local/share"
+    XDG_STATE_HOME="$ROOT/.local/state"
+    XDG_RUNTIME_DIR="$ROOT/run"
+    TMPDIR="$ROOT/tmp"
+
+    export HOME
+    export XDG_CONFIG_HOME
+    export XDG_CACHE_HOME
+    export XDG_DATA_HOME
+    export XDG_STATE_HOME
+    export XDG_RUNTIME_DIR
+    export TMPDIR
+
+    return 0
+}
+
+# Rebuilds the executable path for the current environment.
+# @param None.
+# @return 0 on success.
+kc_env_rebuild_path() {
+    KC_ENV_PATH="$(kc_env_collect_bin_paths \
+        "$ROOT" \
+        "$KC_VENV_ARCH" \
+        "$KC_VENV_PLATFORM")" || return 1
+
+    PATH="$KC_ENV_PATH"
+
+    if [ -n "${KC_HOST_PATH:-}" ]; then
+        PATH="${PATH:+$PATH:}$KC_HOST_PATH"
+    fi
+
+    export KC_ENV_PATH
+    export PATH
+
+    return 0
+}
+
+# Rebuilds the library paths for the current environment.
+# @param None.
+# @return 0 on success.
+kc_env_rebuild_library_path() {
+    KC_ENV_LIBRARY_PATH="$(kc_env_collect_lib_paths \
+        "$ROOT" \
+        "$KC_VENV_ARCH" \
+        "$KC_VENV_PLATFORM")" || return 1
+
+    LIBRARY_PATH="$KC_ENV_LIBRARY_PATH"
+    LD_LIBRARY_PATH="$KC_ENV_LIBRARY_PATH"
+
+    if [ -n "${KC_HOST_LIBRARY_PATH:-}" ]; then
+        LIBRARY_PATH="${LIBRARY_PATH:+$LIBRARY_PATH:}$KC_HOST_LIBRARY_PATH"
+    fi
+
+    if [ -n "${KC_HOST_LD_LIBRARY_PATH:-}" ]; then
+        LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$KC_HOST_LD_LIBRARY_PATH"
+    fi
+
+    export KC_ENV_LIBRARY_PATH
+    export LIBRARY_PATH
+    export LD_LIBRARY_PATH
+
+    return 0
+}
+
+# Activates the current directory as one KaisarCode environment.
+# @param $1 Optional root path.
+# @return 0 on success.
+kc_env_activate() {
+    ROOT="$(kc_env_resolve_root "${1:-}")" || return 1
+    KC_VENV=1
+    KC_VENV_ROOT="$ROOT"
+    KC_VENV_ARCH="$(kc_env_detect_arch)" || return 1
+    KC_VENV_PLATFORM="$(kc_env_detect_platform)" || return 1
+
+    export ROOT
+    export KC_VENV
+    export KC_VENV_ROOT
+    export KC_VENV_ARCH
+    export KC_VENV_PLATFORM
+
+    kc_env_capture_host_paths || return 1
+    kc_env_apply_defaults || return 1
+    kc_env_rebuild_path || return 1
+    kc_env_rebuild_library_path || return 1
+
+    return 0
+}
+
+# Runs the application entry point.
+# @param $@ Full CLI argument list.
+# @return 0 on success, 1 on failure.
+kc_env_main() {
+    kc_env_arg_root=
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                kc_env_help
+                return 0
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -*)
+                kc_env_fail "Unknown option: $1" || return 1
+                return 1
+                ;;
+            *)
+                if [ -n "$kc_env_arg_root" ]; then
+                    kc_env_fail 'Too many arguments.' || return 1
+                    return 1
+                fi
+
+                kc_env_arg_root=$1
+                ;;
+        esac
+
+        shift
+    done
+
+    if [ "$#" -gt 0 ]; then
+        kc_env_fail 'Too many arguments.' || return 1
+        return 1
+    fi
+
+    if kc_env_is_sourced; then
+        kc_env_activate "$kc_env_arg_root"
+        return $?
+    fi
+
+    kc_env_activate "$kc_env_arg_root" || return 1
+    kc_env_spawn_shell
+}
+
+kc_env_main "$@"
