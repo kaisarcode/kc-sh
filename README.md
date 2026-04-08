@@ -1,68 +1,40 @@
 # kc-sh
 
-> **KaisarCode Shell Utilities** - A collection of lightweight, architecture-agnostic, and XDG-compliant shell tools for modern Unix environments.
-
-[![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
-[![Website](https://img.shields.io/badge/website-kaisarcode.com-orange.svg)](https://kaisarcode.com)
+KaisarCode shell utilities.
 
 ## Overview
 
-`kc-sh` is a suite of high-performance shell scripts designed to streamline development, automation, and system management. Every tool follows the philosophy of being "small, sharp, and focused," adhering strictly to **XDG Base Directory** specifications and supporting multiple CPU architectures.
+`kc-sh` is a collection of standalone shell tools.
 
 ## Included Tools
 
 | Tool | Description |
 | :--- | :--- |
-| **`kc-sh`** | The central dispatcher. Run any tool using `kc-sh <tool>`. |
-| **`kc-venv`** | Virtual Environment manager. Activates a root directory with full XDG isolation. |
-| **`kc-shm`** | Shared memory key-value store powered by `/dev/shm`. |
-| **`kc-dmn`** | Unix socket manager for daemonized command interactions. |
-| **`kc-wch`** | File and directory watcher. Emits `add`, `upd`, and `del` events. |
-| **`kc-fifo`** | Intelligent named pipe (FIFO) manager. |
-| **`kc-chat`** | Interactive chat loop delegator for CLI sub-processes. |
-| **`kc-inp`** | Standard input delegator for payload handling. |
-| **`kc-kcs`** | KaisarCode Standards Validator for workspace compliance. |
-| **`kc-ngr`** | N-Gram generator for text analysis using sliding windows. |
-| **`kc-tpm`** | Text Profile Matcher (0 to 1 similarity matching). |
+| **`kc-sh`** | Dispatcher. Runs tools as `kc-sh <tool>`. |
+| **`kc-shm`** | Key-value store backed by `/dev/shm`. |
+| **`kc-dmn`** | Unix socket interface for daemon processes. |
+| **`kc-wch`** | File watcher emitting `add`, `upd`, `del`. |
+| **`kc-fifo`** | Named pipe (FIFO) manager. |
+| **`kc-chat`** | Interactive loop delegator for subprocesses. |
+| **`kc-inp`** | Standard input handler. |
+| **`kc-kcs`** | Workspace validation tool. |
+| **`kc-ngr`** | N-gram generator. |
+| **`kc-tpm`** | Text similarity matcher (0–1 range). |
+| **`kc-venv`** | Activates a directory as a virtual environment. |
 
 ## Installation
 
-To use these tools anywhere in your system, add the `kc-sh` directory to your `PATH` or symlink the dispatcher:
+Add the directory to `PATH`:
 
 ```bash
-# Add to your .bashrc or .zshrc
-export PATH="$PATH:/home/kaisar/Work/kc-sh"
+export PATH="$PATH:/path/to/kc-sh"
+```
 
-# Or use the dispatcher directly
+Or run directly:
+
+```bash
 ./kc-sh --help
 ```
-
-## Usage Examples
-
-### Virtual Environments
-```bash
-# Create and initialize a new isolated environment
-kc-sh venv init ./my-project-env
-```
-
-### Shared Memory store
-```bash
-# Set a value in /dev/shm
-kc-sh shm set user_id 1234
-
-# Retrieve it
-kc-sh shm get user_id
-```
-
-### File Watching
-```bash
-# Watch for changes in the current directory
-kc-sh wch .
-```
-
-## License
-
-Distributed under the [GNU GPL v3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
 ---
 
