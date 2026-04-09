@@ -20,8 +20,10 @@ KaisarCode shell utilities.
 | **`kc-inp`** | Standard input handler. |
 | **`kc-kcs`** | Workspace validation tool. |
 | **`kc-ngr`** | N-gram generator. |
-| **`kc-tpm`** | Text similarity matcher (0–1 range). |
-| **`kc-venv`** | Activates a directory as a virtual environment. |
+| **`kc-tsm`** | Token similarity matcher for candidate generation. |
+| **`kc-tfr`** | Token frequency matcher for candidate generation. |
+| **`kc-tpm`** | Text profile similarity matcher between files. |
+| **`kc-rc`** | Activates a directory as a virtual environment. |
 
 ## Installation
 
