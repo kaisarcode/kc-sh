@@ -1,0 +1,375 @@
+#!/bin/bash
+# kc-tsm - Token Similarity Matcher
+# Summary: Emits corpus lines ordered by token similarity against input text.
+# Author: KaisarCode
+# Website: https://kaisarcode.com
+# License: https://www.gnu.org/licenses/gpl-3.0.html
+
+# Prints application usage help.
+# @return 0 on success.
+kc_tsm_help() {
+    echo "Usage: kc-tsm [options]"
+    echo
+    echo "Options:"
+    echo " -m, --map FILE        Add corpus file. Repeatable."
+    echo " -n NUM                Limit result count."
+    echo " -t, --threshold NUM   Minimum similarity from 0 to 1."
+    echo " -h, --help            Show help"
+    echo
+    echo "Input:"
+    echo " Reads one query string from standard input."
+    echo
+    echo "Output:"
+    echo " Emits one candidate line followed by one tab and one similarity value."
+    echo
+    echo "Examples:"
+    echo " echo \"doc\" | kc-tsm -m corpus.txt"
+    echo " echo \"doc\" | kc-tsm -m corpus.txt -t 0.600000 -n 10"
+}
+
+# Prints one error and the help text to standard error.
+# @param $1 Error message
+# @return 1 on failure.
+kc_tsm_fail() {
+    echo "Error: $1" >&2
+    kc_tsm_help >&2
+    return 1
+}
+
+# Removes temporary files created during execution.
+# @return 0 on success.
+kc_tsm_cleanup() {
+    [ -n "$KC_TSM_SORT_FILE" ] && [ -f "$KC_TSM_SORT_FILE" ] && rm -f "$KC_TSM_SORT_FILE"
+}
+
+# Returns success when the given value is an integer string.
+# @param $1 Value to validate
+# @return 0 when valid, 1 otherwise.
+kc_tsm_is_int() {
+    case "$1" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    return 0
+}
+
+# Returns success when the given value is a decimal number.
+# @param $1 Value to validate
+# @return 0 when valid, 1 otherwise.
+kc_tsm_is_num() {
+    awk 'BEGIN {
+        value = ARGV[1]
+        if (value ~ /^[0-9]+([.][0-9]+)?$/) {
+            exit 0
+        }
+        exit 1
+    }' "$1" >/dev/null 2>&1
+}
+
+# Returns success when the given value is within the 0..1 range.
+# @param $1 Value to validate
+# @return 0 when valid, 1 otherwise.
+kc_tsm_is_unit() {
+    awk 'BEGIN {
+        value = ARGV[1] + 0
+        if (value >= 0.0 && value <= 1.0) {
+            exit 0
+        }
+        exit 1
+    }' "$1" >/dev/null 2>&1
+}
+
+# Normalizes text by collapsing whitespace and lowercasing ASCII letters.
+# @param $1 Input text
+# @return 0 on success.
+kc_tsm_norm() {
+    local text="$1"
+
+    printf '%s' "$text" \
+    | awk '{ if (NR > 1) { printf " " } printf "%s", $0 } END { printf "\n" }' \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -s '[:space:]' ' ' \
+    | sed 's/^ *//; s/ *$//'
+}
+
+# Prints the shared prefix length between two strings.
+# @param $1 Left string
+# @param $2 Right string
+# @return 0 on success.
+kc_tsm_prefix_len() {
+    local left="$1"
+    local right="$2"
+    local left_len="${#left}"
+    local right_len="${#right}"
+    local limit="$left_len"
+    local index
+
+    [ "$right_len" -lt "$limit" ] && limit="$right_len"
+
+    for ((index = 0; index < limit; index++)); do
+        [ "${left:index:1}" = "${right:index:1}" ] || {
+            printf '%s\n' "$index"
+            return 0
+        }
+    done
+
+    printf '%s\n' "$limit"
+}
+
+# Emits one 3-gram per line from the given text.
+# @param $1 Input text
+# @param $2 N-gram size
+# @return 0 on success.
+kc_tsm_grams() {
+    local text="$1"
+    local size="$2"
+    local length="${#text}"
+    local index
+
+    if [ "$length" -lt "$size" ]; then
+        [ -n "$text" ] && printf '%s\n' "$text"
+        return 0
+    fi
+
+    for ((index = 0; index <= length - size; index++)); do
+        printf '%s\n' "${text:index:size}"
+    done
+}
+
+# Emits one 0..1 n-gram similarity score for two strings.
+# @param $1 Left string
+# @param $2 Right string
+# @return 0 on success.
+kc_tsm_gram_score() {
+    local left="$1"
+    local right="$2"
+    local size=3
+
+    awk '
+        NR == FNR {
+            left[$0]++
+            left_total++
+            next
+        }
+        {
+            right[$0]++
+            right_total++
+        }
+        END {
+            if (left_total <= 0 || right_total <= 0) {
+                print "0.000000"
+                exit
+            }
+            common = 0
+            for (gram in left) {
+                if (gram in right) {
+                    common += (left[gram] < right[gram] ? left[gram] : right[gram])
+                }
+            }
+            score = (2.0 * common) / (left_total + right_total)
+            if (score < 0.0) score = 0.0
+            if (score > 1.0) score = 1.0
+            printf "%.6f\n", score
+        }
+    ' <(kc_tsm_grams "$left" "$size") <(kc_tsm_grams "$right" "$size")
+}
+
+# Emits one 0..1 similarity score for input and candidate text.
+# @param $1 Input text
+# @param $2 Candidate text
+# @return 0 on success.
+kc_tsm_score() {
+    local input_text="$1"
+    local candidate_text="$2"
+    local norm_input
+    local norm_candidate
+    local input_len
+    local prefix_len
+    local prefix_score
+    local gram_score
+
+    norm_input="$(kc_tsm_norm "$input_text")"
+    norm_candidate="$(kc_tsm_norm "$candidate_text")"
+
+    [ -n "$norm_input" ] || {
+        printf '0.000000\n'
+        return 0
+    }
+
+    [ -n "$norm_candidate" ] || {
+        printf '0.000000\n'
+        return 0
+    }
+
+    [ "$norm_input" = "$norm_candidate" ] && {
+        printf '1.000000\n'
+        return 0
+    }
+
+    input_len="${#norm_input}"
+    prefix_len="$(kc_tsm_prefix_len "$norm_input" "$norm_candidate")"
+    prefix_score="$(awk 'BEGIN {
+        input_len = ARGV[1] + 0
+        prefix_len = ARGV[2] + 0
+        if (input_len <= 0) {
+            print "0.000000"
+            exit
+        }
+        printf "%.6f\n", prefix_len / input_len
+    }' "$input_len" "$prefix_len")"
+    gram_score="$(kc_tsm_gram_score "$norm_input" "$norm_candidate")"
+
+    awk 'BEGIN {
+        prefix = ARGV[1] + 0
+        grams = ARGV[2] + 0
+        score = (prefix * 0.80) + (grams * 0.20)
+        if (score < 0.0) score = 0.0
+        if (score > 1.0) score = 1.0
+        printf "%.6f\n", score
+    }' "$prefix_score" "$gram_score"
+}
+
+# Adds one readable corpus map file.
+# @param $1 Map file path
+# @return 0 on success, 1 on failure.
+kc_tsm_add_map() {
+    local file="$1"
+
+    [ -n "$file" ] || return 1
+    [ -f "$file" ] || return 1
+    [ -r "$file" ] || return 1
+
+    KC_TSM_MAPS+=("$file")
+    return 0
+}
+
+# Loads unique normalized candidates from all configured maps.
+# @return 0 on success.
+kc_tsm_load_candidates() {
+    local file
+    local line
+    local key
+
+    KC_TSM_CANDIDATES=()
+    declare -gA KC_TSM_SEEN=()
+
+    for file in "${KC_TSM_MAPS[@]}"; do
+        while IFS= read -r line || [ -n "$line" ]; do
+            key="$(kc_tsm_norm "$line")"
+            [ -n "$key" ] || continue
+            [ -n "${KC_TSM_SEEN[$key]}" ] && continue
+            KC_TSM_SEEN["$key"]=1
+            KC_TSM_CANDIDATES+=("$line")
+        done < "$file"
+    done
+
+    return 0
+}
+
+# Emits filtered candidates ordered by descending similarity.
+# @param $1 Input text
+# @param $2 Minimum threshold
+# @param $3 Maximum result count
+# @return 0 on success.
+kc_tsm_emit() {
+    local input_text="$1"
+    local threshold="$2"
+    local limit="$3"
+    local index=0
+    local line
+    local score
+
+    : > "$KC_TSM_SORT_FILE"
+
+    for line in "${KC_TSM_CANDIDATES[@]}"; do
+        index=$((index + 1))
+        score="$(kc_tsm_score "$input_text" "$line")"
+        awk 'BEGIN {
+            score = ARGV[1] + 0
+            threshold = ARGV[2] + 0
+            if (score >= threshold) {
+                exit 0
+            }
+            exit 1
+        }' "$score" "$threshold" >/dev/null 2>&1 || continue
+        printf '%s\t%s\t%s\n' "$score" "$index" "$line" >> "$KC_TSM_SORT_FILE"
+    done
+
+    sort -t $'\t' -k1,1nr -k2,2n "$KC_TSM_SORT_FILE" \
+    | awk -F '\t' -v limit="$limit" '
+        {
+            line = $0
+            sub(/^[^\t]*\t[^\t]*\t/, "", line)
+            printf "%s\t%s\n", line, $1
+            count++
+            if (limit > 0 && count >= limit) {
+                exit
+            }
+        }
+    '
+}
+
+# Runs CLI parsing and similarity matching.
+# @param $@ Application arguments
+# @return 0 on success, 1 on failure.
+main() {
+    local threshold="0.000000"
+    local limit=0
+    local input_text
+    local arg
+
+    KC_TSM_MAPS=()
+    KC_TSM_SORT_FILE="$(mktemp)" || return 1
+    trap kc_tsm_cleanup EXIT INT TERM
+
+    while [ "$#" -gt 0 ]; do
+        arg="$1"
+
+        case "$arg" in
+            -h|--help)
+                kc_tsm_help
+                return 0
+                ;;
+            -m|--map)
+                shift
+                [ -n "$1" ] || kc_tsm_fail "Missing value for $arg." || return 1
+                kc_tsm_add_map "$1" || kc_tsm_fail "Invalid map." || return 1
+                ;;
+            -n)
+                shift
+                [ -n "$1" ] || kc_tsm_fail "Missing value for -n." || return 1
+                kc_tsm_is_int "$1" || kc_tsm_fail "Invalid value for -n." || return 1
+                [ "$1" -ge 1 ] || kc_tsm_fail "Invalid value for -n." || return 1
+                limit="$1"
+                ;;
+            -t|--threshold)
+                shift
+                [ -n "$1" ] || kc_tsm_fail "Missing value for $arg." || return 1
+                kc_tsm_is_num "$1" || kc_tsm_fail "Invalid threshold." || return 1
+                kc_tsm_is_unit "$1" || kc_tsm_fail "Invalid threshold." || return 1
+                threshold="$1"
+                ;;
+            -*)
+                kc_tsm_fail "Unknown argument." || return 1
+                ;;
+            *)
+                kc_tsm_fail "Unknown argument." || return 1
+                ;;
+        esac
+
+        shift
+    done
+
+    [ "${#KC_TSM_MAPS[@]}" -gt 0 ] || kc_tsm_fail "Missing map." || return 1
+
+    input_text="$(cat)"
+    [ -n "$input_text" ] || return 0
+
+    kc_tsm_load_candidates || return 1
+    [ "${#KC_TSM_CANDIDATES[@]}" -gt 0 ] || return 0
+    kc_tsm_emit "$input_text" "$threshold" "$limit"
+}
+
+main "$@"

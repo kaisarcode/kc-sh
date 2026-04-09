@@ -442,6 +442,15 @@ kc_env_prepare_shell_rc() {
 if [ -f "$ROOT/.env" ]; then
     . "$ROOT/.env"
 fi
+
+if [ -n "${KC_ENV_SHELL_RC_PATH:-}" ]; then
+    rm -f "$KC_ENV_SHELL_RC_PATH"
+fi
+
+if [ -n "${KC_ENV_ZDOTDIR_PATH:-}" ]; then
+    rm -f "$KC_ENV_ZDOTDIR_PATH/.zshrc"
+    rmdir "$KC_ENV_ZDOTDIR_PATH" 2>/dev/null || :
+fi
 EOF
 
     printf '%s\n' "$kc_env_psr_path"
@@ -484,14 +493,17 @@ kc_env_spawn_shell() {
 
     case "${KC_ENV_SHELL##*/}" in
         bash|rbash)
-            exec "$KC_ENV_SHELL" --rcfile "$KC_ENV_SHELL_RC" -i
+            KC_ENV_SHELL_RC_PATH="$KC_ENV_SHELL_RC" exec "$KC_ENV_SHELL" --rcfile "$KC_ENV_SHELL_RC" -i
             ;;
         zsh)
             KC_ENV_ZDOTDIR="$(kc_env_prepare_zdotdir "$KC_ENV_SHELL_RC")" || return 1
-            ZDOTDIR="$KC_ENV_ZDOTDIR" exec "$KC_ENV_SHELL" -i
+            KC_ENV_SHELL_RC_PATH="$KC_ENV_SHELL_RC" \
+            KC_ENV_ZDOTDIR_PATH="$KC_ENV_ZDOTDIR" \
+            ZDOTDIR="$KC_ENV_ZDOTDIR" \
+            exec "$KC_ENV_SHELL" -i
             ;;
         sh|dash|ash|ksh|mksh)
-            ENV="$KC_ENV_SHELL_RC" exec "$KC_ENV_SHELL" -i
+            KC_ENV_SHELL_RC_PATH="$KC_ENV_SHELL_RC" ENV="$KC_ENV_SHELL_RC" exec "$KC_ENV_SHELL" -i
             ;;
     esac
 
