@@ -23,7 +23,7 @@ KaisarCode shell utilities.
 | **`kc-tsm`** | Token similarity matcher for candidate generation. |
 | **`kc-tfr`** | Token frequency matcher for candidate generation. |
 | **`kc-tpm`** | Text profile similarity matcher between files. |
-| **`kc-rc`** | Activates a directory as a virtual environment. |
+| **`kc-env`** | Activates a directory as a virtual environment. |
 
 ## Installation
 

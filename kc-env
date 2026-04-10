@@ -329,7 +329,7 @@ kc_env_collect_lib_paths() (
 # Prints application usage help.
 # @return 0 on success.
 kc_env_help() {
-    printf 'Usage: kc-rc [options] [root]\n'
+    printf 'Usage: kc-env [options] [root]\n'
     printf '\n'
     printf 'Options:\n'
     printf '  [root]         Project one environment root directory\n'
@@ -339,16 +339,16 @@ kc_env_help() {
     printf '  .env           Source this file after environment activation if it exists\n'
     printf '\n'
     printf 'Examples:\n'
-    printf '  kc-rc\n'
-    printf '  kc-rc ./env\n'
-    printf '  . ./kc-rc ./env\n'
+    printf '  kc-env\n'
+    printf '  kc-env ./env\n'
+    printf '  . ./kc-env ./env\n'
 }
 
 # Prints one error message to standard error.
 # @param $1 Error message.
 # @return 1 on failure.
 kc_env_fail() {
-    printf 'kc-rc: error: %s\n' "$1" >&2
+    printf 'kc-env: error: %s\n' "$1" >&2
     return 1
 }
 
@@ -432,9 +432,9 @@ kc_env_prepare_shell_rc() {
     fi
 
     if command -v mktemp >/dev/null 2>&1; then
-        kc_env_psr_path=$(mktemp "$kc_env_psr_dir/kc-rc.XXXXXX") || return 1
+        kc_env_psr_path=$(mktemp "$kc_env_psr_dir/kc-env.XXXXXX") || return 1
     else
-        kc_env_psr_path=$kc_env_psr_dir/kc-rc.$$
+        kc_env_psr_path=$kc_env_psr_dir/kc-env.$$
         : > "$kc_env_psr_path" || return 1
     fi
 
@@ -469,9 +469,9 @@ kc_env_prepare_zdotdir() {
     fi
 
     if command -v mktemp >/dev/null 2>&1; then
-        kc_env_pzd_path=$(mktemp -d "$kc_env_pzd_dir/kc-rc-zdotdir.XXXXXX") || return 1
+        kc_env_pzd_path=$(mktemp -d "$kc_env_pzd_dir/kc-env-zdotdir.XXXXXX") || return 1
     else
-        kc_env_pzd_path=$kc_env_pzd_dir/kc-rc-zdotdir.$$
+        kc_env_pzd_path=$kc_env_pzd_dir/kc-env-zdotdir.$$
         mkdir -p "$kc_env_pzd_path" || return 1
     fi
 
