@@ -1,12 +1,10 @@
 #!/bin/sh
-# kc-env - KaisarCode Runtime Configuration.
-# Summary: Activates one directory as a virtual environment in the current shell or one child shell.
+# kc-env - KaisarCode Virtual Environment.
+# Summary: KC Env is an extremely opinionated virtual root environment.
 # Author:  KaisarCode
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
 #
-# Layout: bin, lib, tmp, run, .config, .cache, .local/share, .local/state.
-# Hooks: .env
 # Architectures: x86_64, x86, aarch64, armv7, riscv64, riscv32, ppc64le, ppc64.
 # Platforms: linux, android, macos, windows, freebsd, openbsd, netbsd, solaris.
 # shellcheck disable=SC1090,SC1091
@@ -539,10 +537,10 @@ kc_env_capture_host_paths() {
 # @return 0 on success.
 kc_env_apply_defaults() {
     HOME="$ROOT"
-    XDG_CONFIG_HOME="$ROOT/.config"
-    XDG_CACHE_HOME="$ROOT/.cache"
-    XDG_DATA_HOME="$ROOT/.local/share"
-    XDG_STATE_HOME="$ROOT/.local/state"
+    XDG_CONFIG_HOME="$ROOT/var/config"
+    XDG_CACHE_HOME="$ROOT/var/cache"
+    XDG_DATA_HOME="$ROOT/var/share"
+    XDG_STATE_HOME="$ROOT/var/state"
     XDG_RUNTIME_DIR="$ROOT/run"
     TMPDIR="$ROOT/tmp"
 
