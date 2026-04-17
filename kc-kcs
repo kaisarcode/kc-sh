@@ -220,7 +220,7 @@ validate_docblock_format() {
             bad_line=$(awk '
                 NR <= 20 { next }
                 /^[[:space:]]*\/\*\*/ {
-                    if (NR > 1 && prev_nonblank != "") {
+                    if (NR > 1 && prev_nonblank != "" && prev_nonblank !~ /^[[:space:]]*#/) {
                         print NR
                         exit
                     }
@@ -235,6 +235,10 @@ validate_docblock_format() {
                 }
                 in_docblock && /^[[:space:]]*\*/ {
                     if (length($0) > 80) { print NR; exit }
+                    next
+                }
+                /^[[:space:]]*#/ {
+                    prev_nonblank = $0
                     next
                 }
                 /^[[:space:]]*$/ { prev_nonblank = ""; next }
@@ -293,7 +297,7 @@ validate_docblock_spacing() {
         c|php)
             bad_line=$(awk '
                 /^[[:space:]]*\/\*\*/ {
-                    if (NR > 1 && prev_blank == 0) {
+                    if (NR > 1 && prev_blank == 0 && !prev_preproc) {
                         print NR
                         exit
                     }
@@ -306,11 +310,20 @@ validate_docblock_spacing() {
                     }
                     next
                 }
-                /^[[:space:]]*$/ {
-                    prev_blank = 1
+                /^[[:space:]]*#/ {
+                    prev_blank = 0
+                    prev_preproc = 1
                     next
                 }
-                { prev_blank = 0 }
+                /^[[:space:]]*$/ {
+                    prev_blank = 1
+                    prev_preproc = 0
+                    next
+                }
+                {
+                    prev_blank = 0
+                    prev_preproc = 0
+                }
             ' "$file_path" || true)
             ;;
         *)
