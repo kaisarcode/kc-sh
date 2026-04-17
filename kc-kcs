@@ -391,18 +391,21 @@ validate_no_internal_comments() {
         bad_line=$(awk -v h="#" -v s=" " '
             NR <= 20 { next }
             $0 ~ "^"h {
-                if ($0 !~ "^"h" ([*@]|Summary:|Author:|Website:|License:|Email:|©|"s"|[A-Z])") {
+                if (!in_docblock && $0 !~ "^"h" ([*@]|Summary:|Author:|Website:|License:|Email:|©|"s"|[A-Z])") {
                     print NR; exit
                 }
                 if ($0 ~ /@return/) seen_return = 1
                 in_docblock = 1; next
             }
             index($0, s h) { print NR; exit }
+            /^[[:space:]]*$/ { in_docblock = 0; seen_return = 0 }
             /^[a-z_]+[ ]*\(\)/ {
                 if (in_docblock && !seen_return) { print NR; exit }
                 in_docblock = 0; seen_return = 0
             }
-            /^[[:space:]]*$/ { in_docblock = 0; seen_return = 0 }
+            in_docblock {
+                print NR; exit
+            }
         ' "$file_path")
         [ -n "$bad_line" ] && fail "$file_path:$bad_line Forbidden internal comment or missing @return."
     elif [ "$ftype" = "c" ]; then
@@ -539,8 +542,17 @@ validate_function_docblocks() {
                     line !~ /=/ &&
                     !is_control_line(line)
             }
-            /^[[:space:]]*\/\*\*/ { in_docblock = 1; next }
+            /^[[:space:]]*\/\*\*/ {
+                in_docblock = 1
+                if ($0 ~ /@return/) {
+                    seen_return = 1
+                }
+                next
+            }
             in_docblock {
+                if ($0 ~ /@return/) {
+                    seen_return = 1
+                }
                 if ($0 ~ /\*\//) {
                     in_docblock = 0
                     docblock_ready = 1
@@ -549,32 +561,37 @@ validate_function_docblocks() {
             }
             /^[[:space:]]*$/ {
                 docblock_ready = 0
+                seen_return = 0
                 next
             }
             /^[[:space:]]*#/ { next }
             pending_function && /^[[:space:]]*\{/ {
-                if (!docblock_ready) { print pending_line; exit }
+                if (!docblock_ready || !seen_return) { print pending_line; exit }
                 pending_function = 0
                 docblock_ready = 0
+                seen_return = 0
                 next
             }
             pending_function {
                 if ($0 ~ /;[[:space:]]*$/) {
                     pending_function = 0
                     docblock_ready = 0
+                    seen_return = 0
                     next
                 }
                 if ($0 ~ /\)[[:space:]]*\{/) {
-                    if (!docblock_ready) { print pending_line; exit }
+                    if (!docblock_ready || !seen_return) { print pending_line; exit }
                     pending_function = 0
                     docblock_ready = 0
+                    seen_return = 0
                     next
                 }
                 next
             }
             is_function_single($0) {
-                if (!docblock_ready) { print NR; exit }
+                if (!docblock_ready || !seen_return) { print NR; exit }
                 docblock_ready = 0
+                seen_return = 0
                 next
             }
             is_function_start($0) {
@@ -587,9 +604,12 @@ validate_function_docblocks() {
                 pending_line = NR
                 next
             }
-            { docblock_ready = 0 }
+            {
+                docblock_ready = 0
+                seen_return = 0
+            }
         ' "$file_path")
-        [ -n "$bad_line" ] && fail "$file_path:$bad_line Missing function DocBlock."
+        [ -n "$bad_line" ] && fail "$file_path:$bad_line Missing function DocBlock or @return."
     fi
     pass "$file_path: Function DocBlocks verified."
 }

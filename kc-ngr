@@ -111,7 +111,8 @@ kc_ngr_close_span() {
 }
 
 # Executes the optional command for one chunk.
-# The chunk is passed on stdin. Any stdout produced by the command closes the span.
+# The chunk is passed on stdin.
+# Any stdout produced by the command closes the span.
 # Environment:
 #   KC_NGR_START  Start token index
 #   KC_NGR_END    End token index
@@ -163,6 +164,8 @@ kc_ngr_execute() {
     local index
     local line
     local cmd_output
+
+    : "${closed_starts[@]}" "${closed_ends[@]}"
 
     mapfile -t tokens < <(kc_ngr_split_tokens "$input_text" "$sep_chars")
     token_count="${#tokens[@]}"
