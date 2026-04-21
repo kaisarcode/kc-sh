@@ -1,0 +1,533 @@
+#!/bin/bash
+
+# kc-pfw - Persistent TCP port forwarding manager.
+# Summary: Registers and runs named TCP port forwards through socat.
+# Author: KaisarCode
+# Website: https://kaisarcode.com
+# License: https://www.gnu.org/licenses/gpl-3.0.html
+
+# Prints application usage help.
+# @return 0 on success.
+kc_pfw_help() {
+
+    echo "Options:"
+    echo " set  Register or replace one TCP forward"
+    echo " get  Print one registered TCP forward"
+    echo " del  Remove one registered TCP forward and stop it if running"
+    echo " ls   List registered TCP forward names"
+    echo " -h   Show help"
+    echo
+    echo "Usage:"
+    echo " kc-pfw set <name> <listen_host>:<listen_port> <target_host>:<target_port>"
+    echo " kc-pfw get <name>"
+    echo " kc-pfw del <name>"
+    echo " kc-pfw ls"
+    echo
+    echo "Examples:"
+    echo " kc-pfw set vm-ssh 127.0.0.1:2222 guest.local:22"
+    echo " kc-pfw set vm-web 0.0.0.0:8080 192.168.122.10:80"
+    echo " kc-pfw get vm-ssh"
+    echo " kc-pfw del vm-ssh"
+    echo " kc-pfw ls"
+    echo
+    echo "Dependencies:"
+    echo " socat"
+
+}
+
+# Prints one error and the help text to standard error.
+# @param $1 Error message.
+# @return 1 on failure.
+kc_pfw_fail() {
+
+    echo "Error: $1" >&2
+    kc_pfw_help >&2
+    return 1
+
+}
+
+# Resolve runtime directory.
+# @return 0 on success.
+kc_pfw_runtime_dir() {
+
+    local uid
+    local dir
+
+    if [ -n "$XDG_RUNTIME_DIR" ] && [ -d "$XDG_RUNTIME_DIR" ] && [ -w "$XDG_RUNTIME_DIR" ]; then
+        echo "$XDG_RUNTIME_DIR/kc-pfw"
+        return 0
+    fi
+
+    uid="$(id -u)"
+    dir="/run/user/$uid"
+
+    if [ -d "$dir" ] && [ -w "$dir" ]; then
+        echo "$dir/kc-pfw"
+        return 0
+    fi
+
+    echo "/tmp/kc-pfw-$uid"
+    return 0
+
+}
+
+# Resolve state directory.
+# @return 0 on success.
+kc_pfw_state_dir() {
+
+    local home
+    local state
+
+    if [ -n "$XDG_STATE_HOME" ]; then
+        state="$XDG_STATE_HOME/kc-pfw"
+        mkdir -p "$state" || return 1
+        echo "$state"
+        return 0
+    fi
+
+    home="${HOME:-}"
+    [ -n "$home" ] || return 1
+
+    state="$home/.local/state/kc-pfw"
+    mkdir -p "$state" || return 1
+    echo "$state"
+    return 0
+
+}
+
+# Validate one forward name.
+# @param $1 Forward name.
+# @return 0 on success, 1 on failure.
+kc_pfw_valid_name() {
+
+    case "$1" in
+        ""|*[!a-zA-Z0-9._-]*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+
+}
+
+# Validate one TCP port.
+# @param $1 Port number.
+# @return 0 on success, 1 on failure.
+kc_pfw_valid_port() {
+
+    case "$1" in
+        ""|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    [ "$1" -ge 1 ] 2>/dev/null || return 1
+    [ "$1" -le 65535 ] 2>/dev/null || return 1
+    return 0
+
+}
+
+# Split one host:port endpoint into global variables.
+# @param $1 Endpoint string.
+# @return 0 on success, 1 on failure.
+kc_pfw_split_endpoint() {
+
+    local endpoint
+    local host
+    local port
+
+    endpoint="$1"
+
+    case "$endpoint" in
+        *:*)
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    host="${endpoint%:*}"
+    port="${endpoint##*:}"
+
+    [ -n "$host" ] || return 1
+    kc_pfw_valid_port "$port" || return 1
+
+    PFW_SPLIT_HOST="$host"
+    PFW_SPLIT_PORT="$port"
+    return 0
+
+}
+
+# Check whether one local TCP listen port is already in use.
+# @param $1 Listen host.
+# @param $2 Listen port.
+# @return 0 if port is in use, 1 otherwise.
+kc_pfw_port_in_use() {
+
+    local listen_host
+    local listen_port
+
+    listen_host="$1"
+    listen_port="$2"
+
+    if command -v ss >/dev/null 2>&1; then
+        if ss -ltn 2>/dev/null | awk -v port=":$listen_port" '
+            NR > 1 {
+                n = split($4, parts, ":")
+                if (n > 1) {
+                    p = ":" parts[n]
+                    if (p == port) {
+                        found = 1
+                    }
+                }
+            }
+            END {
+                exit(found ? 0 : 1)
+            }
+        '; then
+            return 0
+        fi
+    fi
+
+    if command -v lsof >/dev/null 2>&1; then
+        if lsof -nP -iTCP:"$listen_port" -sTCP:LISTEN >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+
+    return 1
+
+}
+
+# Return state file path for one forward name.
+# @param $1 Forward name.
+# @return Path on stdout.
+kc_pfw_state_file() {
+
+    echo "$state_dir/$1.env"
+
+}
+
+# Return pid file path for one forward name.
+# @param $1 Forward name.
+# @return Path on stdout.
+kc_pfw_pid_file() {
+
+    echo "$runtime_dir/$1.pid"
+
+}
+
+# Return log file path for one forward name.
+# @param $1 Forward name.
+# @return Path on stdout.
+kc_pfw_log_file() {
+
+    echo "$runtime_dir/$1.log"
+
+}
+
+# Check whether one forward exists in state.
+# @param $1 Forward name.
+# @return 0 if exists, 1 otherwise.
+kc_pfw_exists() {
+
+    [ -f "$(kc_pfw_state_file "$1")" ]
+
+}
+
+# Check whether one forward process is running.
+# @param $1 Forward name.
+# @return 0 if running, 1 otherwise.
+kc_pfw_running() {
+
+    local pid_file
+    local pid
+
+    pid_file="$(kc_pfw_pid_file "$1")"
+    [ -f "$pid_file" ] || return 1
+
+    pid="$(cat "$pid_file" 2>/dev/null)"
+    [ -n "$pid" ] || return 1
+
+    kill -0 "$pid" 2>/dev/null
+
+}
+
+# Load one forward definition from state.
+# @param $1 Forward name.
+# @return 0 on success, 1 on failure.
+kc_pfw_load() {
+
+    local file
+
+    file="$(kc_pfw_state_file "$1")"
+    [ -f "$file" ] || return 1
+
+    unset PFW_NAME
+    unset PFW_LISTEN_HOST
+    unset PFW_LISTEN_PORT
+    unset PFW_TARGET_HOST
+    unset PFW_TARGET_PORT
+
+    eval ". \"$file\""
+
+    [ -n "$PFW_NAME" ] || return 1
+    [ -n "$PFW_LISTEN_HOST" ] || return 1
+    [ -n "$PFW_LISTEN_PORT" ] || return 1
+    [ -n "$PFW_TARGET_HOST" ] || return 1
+    [ -n "$PFW_TARGET_PORT" ] || return 1
+
+    return 0
+
+}
+
+# Save one forward definition to state.
+# @param $1 Forward name.
+# @param $2 Listen host.
+# @param $3 Listen port.
+# @param $4 Target host.
+# @param $5 Target port.
+# @return 0 on success, 1 on failure.
+kc_pfw_save() {
+
+    local file
+
+    file="$(kc_pfw_state_file "$1")"
+
+    {
+        echo "PFW_NAME='$1'"
+        echo "PFW_LISTEN_HOST='$2'"
+        echo "PFW_LISTEN_PORT='$3'"
+        echo "PFW_TARGET_HOST='$4'"
+        echo "PFW_TARGET_PORT='$5'"
+    } > "$file" || return 1
+
+    return 0
+
+}
+
+# Stop one running forward.
+# @param $1 Forward name.
+# @return 0 on success, 1 on failure.
+kc_pfw_stop() {
+
+    local pid_file
+    local pid
+
+    pid_file="$(kc_pfw_pid_file "$1")"
+
+    if [ ! -f "$pid_file" ]; then
+        return 0
+    fi
+
+    pid="$(cat "$pid_file" 2>/dev/null)"
+
+    if [ -n "$pid" ]; then
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+    fi
+
+    rm -f "$pid_file"
+    return 0
+
+}
+
+# Start one forward from loaded state variables.
+# @return 0 on success, 1 on failure.
+kc_pfw_start_loaded() {
+
+    local pid_file
+    local log_file
+    local pid
+
+    pid_file="$(kc_pfw_pid_file "$PFW_NAME")"
+    log_file="$(kc_pfw_log_file "$PFW_NAME")"
+
+    nohup socat \
+        "TCP-LISTEN:$PFW_LISTEN_PORT,bind=$PFW_LISTEN_HOST,reuseaddr,fork" \
+        "TCP:$PFW_TARGET_HOST:$PFW_TARGET_PORT" \
+        >"$log_file" 2>&1 &
+
+    pid="$!"
+    [ -n "$pid" ] || return 1
+
+    echo "$pid" > "$pid_file" || return 1
+    sleep 1
+
+    if ! kill -0 "$pid" 2>/dev/null; then
+        rm -f "$pid_file"
+        return 1
+    fi
+
+    return 0
+
+}
+
+# Register or replace one forward.
+# @return 0 on success, 1 on failure.
+kc_pfw_set() {
+
+    local name
+    local listen_endpoint
+    local target_endpoint
+
+    name="$1"
+    listen_endpoint="$2"
+    target_endpoint="$3"
+
+    kc_pfw_valid_name "$name" || kc_pfw_fail "Invalid name for set." || return 1
+    kc_pfw_split_endpoint "$listen_endpoint" || kc_pfw_fail "Invalid listen endpoint for set." || return 1
+
+    local listen_host
+    local listen_port
+
+    listen_host="$PFW_SPLIT_HOST"
+    listen_port="$PFW_SPLIT_PORT"
+
+    kc_pfw_split_endpoint "$target_endpoint" || kc_pfw_fail "Invalid target endpoint for set." || return 1
+
+    local target_host
+    local target_port
+
+    target_host="$PFW_SPLIT_HOST"
+    target_port="$PFW_SPLIT_PORT"
+
+    if kc_pfw_exists "$name"; then
+        kc_pfw_load "$name" || return 1
+        if [ "$PFW_LISTEN_HOST" = "$listen_host" ] && [ "$PFW_LISTEN_PORT" = "$listen_port" ]; then
+            kc_pfw_stop "$name" >/dev/null 2>&1 || return 1
+        fi
+    fi
+
+    if kc_pfw_port_in_use "$listen_host" "$listen_port"; then
+        kc_pfw_fail "Listen port already in use: $listen_port" || return 1
+    fi
+
+    kc_pfw_save "$name" "$listen_host" "$listen_port" "$target_host" "$target_port" || return 1
+    kc_pfw_load "$name" || return 1
+    kc_pfw_start_loaded || return 1
+
+    echo "set"
+    return 0
+
+}
+
+# Print one registered forward.
+# @return 0 on success, 1 on failure.
+kc_pfw_get() {
+
+    local name
+
+    name="$1"
+
+    kc_pfw_valid_name "$name" || kc_pfw_fail "Invalid name for get." || return 1
+    kc_pfw_exists "$name" || kc_pfw_fail "Unknown forward: $name" || return 1
+    kc_pfw_load "$name" || return 1
+
+    echo "$PFW_NAME $PFW_LISTEN_HOST:$PFW_LISTEN_PORT $PFW_TARGET_HOST:$PFW_TARGET_PORT"
+    return 0
+
+}
+
+# Remove one registered forward.
+# @return 0 on success, 1 on failure.
+kc_pfw_del() {
+
+    local name
+    local file
+    local pid_file
+    local log_file
+
+    name="$1"
+
+    kc_pfw_valid_name "$name" || kc_pfw_fail "Invalid name for del." || return 1
+    kc_pfw_exists "$name" || kc_pfw_fail "Unknown forward: $name" || return 1
+
+    file="$(kc_pfw_state_file "$name")"
+    pid_file="$(kc_pfw_pid_file "$name")"
+    log_file="$(kc_pfw_log_file "$name")"
+
+    kc_pfw_stop "$name" >/dev/null 2>&1 || return 1
+    rm -f "$file" "$pid_file" "$log_file" || return 1
+
+    echo "del"
+    return 0
+
+}
+
+# List registered forward names.
+# @return 0 on success, 1 on failure.
+kc_pfw_ls() {
+
+    local file
+    local name
+
+    [ -d "$state_dir" ] || return 0
+
+    for file in "$state_dir"/*.env; do
+        [ -e "$file" ] || return 0
+        name="$(basename "$file")"
+        name="${name%.env}"
+        echo "$name"
+    done
+
+    return 0
+
+}
+
+# Main entry point.
+# @return 0 on success, 1 on failure.
+main() {
+
+    local cmd
+
+    if [[ "$1" = "-h" || "$1" = "--help" || -z "$1" ]]; then
+        kc_pfw_help
+        [ -n "$1" ]
+        return $?
+    fi
+
+    if ! command -v socat >/dev/null 2>&1; then
+        kc_pfw_fail "socat not found" || return 1
+    fi
+
+    runtime_dir="$(kc_pfw_runtime_dir)" || return 1
+    state_dir="$(kc_pfw_state_dir)" || return 1
+
+    mkdir -p "$runtime_dir" || return 1
+    mkdir -p "$state_dir" || return 1
+
+    cmd="$1"
+    shift
+
+    if [[ "$cmd" = "set" ]]; then
+        [ -n "$1" ] || kc_pfw_fail "Missing name for set." || return 1
+        [ -n "$2" ] || kc_pfw_fail "Missing listen endpoint for set." || return 1
+        [ -n "$3" ] || kc_pfw_fail "Missing target endpoint for set." || return 1
+        kc_pfw_set "$1" "$2" "$3"
+        return $?
+    fi
+
+    if [[ "$cmd" = "get" ]]; then
+        [ -n "$1" ] || kc_pfw_fail "Missing name for get." || return 1
+        kc_pfw_get "$1"
+        return $?
+    fi
+
+    if [[ "$cmd" = "del" ]]; then
+        [ -n "$1" ] || kc_pfw_fail "Missing name for del." || return 1
+        kc_pfw_del "$1"
+        return $?
+    fi
+
+    if [[ "$cmd" = "ls" ]]; then
+        kc_pfw_ls
+        return $?
+    fi
+
+    kc_pfw_fail "Unknown command: $cmd" || return 1
+
+}
+
+main "$@"
