@@ -11,7 +11,7 @@
 kc_pfw_help() {
 
     echo "Options:"
-    echo " set  Register or replace one TCP forward"
+    echo " set  Register one TCP forward"
     echo " get  Print one registered TCP forward"
     echo " del  Remove one registered TCP forward and stop it if running"
     echo " ls   List registered TCP forward names"
@@ -42,6 +42,26 @@ kc_pfw_fail() {
 
     echo "Error: $1" >&2
     kc_pfw_help >&2
+    return 1
+
+}
+
+# Prints one error to standard error.
+# @param $1 Error message.
+# @return 1 on failure.
+kc_pfw_error() {
+
+    echo "Error: $1" >&2
+    return 1
+
+}
+
+# Prints one notice to standard error.
+# @param $1 Notice message.
+# @return 1 on failure.
+kc_pfw_notice() {
+
+    echo "$1" >&2
     return 1
 
 }
@@ -314,6 +334,7 @@ kc_pfw_stop() {
 
     local pid_file
     local pid
+    local attempts_left
 
     pid_file="$(kc_pfw_pid_file "$1")"
 
@@ -324,8 +345,20 @@ kc_pfw_stop() {
     pid="$(cat "$pid_file" 2>/dev/null)"
 
     if [ -n "$pid" ]; then
-        kill "$pid" 2>/dev/null || true
-        wait "$pid" 2>/dev/null || true
+        kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+
+        attempts_left="5"
+        while [ "$attempts_left" -gt 0 ]; do
+            if ! kill -0 "$pid" 2>/dev/null; then
+                break
+            fi
+            sleep 1
+            attempts_left="$((attempts_left - 1))"
+        done
+
+        if kill -0 "$pid" 2>/dev/null; then
+            kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+        fi
     fi
 
     rm -f "$pid_file"
@@ -344,10 +377,17 @@ kc_pfw_start_loaded() {
     pid_file="$(kc_pfw_pid_file "$PFW_NAME")"
     log_file="$(kc_pfw_log_file "$PFW_NAME")"
 
-    nohup socat \
-        "TCP-LISTEN:$PFW_LISTEN_PORT,bind=$PFW_LISTEN_HOST,reuseaddr,fork" \
-        "TCP:$PFW_TARGET_HOST:$PFW_TARGET_PORT" \
-        >"$log_file" 2>&1 &
+    if command -v setsid >/dev/null 2>&1; then
+        setsid socat \
+            "TCP-LISTEN:$PFW_LISTEN_PORT,bind=$PFW_LISTEN_HOST,reuseaddr,fork" \
+            "TCP:$PFW_TARGET_HOST:$PFW_TARGET_PORT" \
+            >"$log_file" 2>&1 &
+    else
+        nohup socat \
+            "TCP-LISTEN:$PFW_LISTEN_PORT,bind=$PFW_LISTEN_HOST,reuseaddr,fork" \
+            "TCP:$PFW_TARGET_HOST:$PFW_TARGET_PORT" \
+            >"$log_file" 2>&1 &
+    fi
 
     pid="$!"
     [ -n "$pid" ] || return 1
@@ -364,7 +404,7 @@ kc_pfw_start_loaded() {
 
 }
 
-# Register or replace one forward.
+# Register one forward.
 # @return 0 on success, 1 on failure.
 kc_pfw_set() {
 
@@ -394,10 +434,7 @@ kc_pfw_set() {
     target_port="$PFW_SPLIT_PORT"
 
     if kc_pfw_exists "$name"; then
-        kc_pfw_load "$name" || return 1
-        if [ "$PFW_LISTEN_HOST" = "$listen_host" ] && [ "$PFW_LISTEN_PORT" = "$listen_port" ]; then
-            kc_pfw_stop "$name" >/dev/null 2>&1 || return 1
-        fi
+        kc_pfw_notice "Forward already exists: $name" || return 1
     fi
 
     if kc_pfw_port_in_use "$listen_host" "$listen_port"; then
@@ -421,7 +458,7 @@ kc_pfw_get() {
     name="$1"
 
     kc_pfw_valid_name "$name" || kc_pfw_fail "Invalid name for get." || return 1
-    kc_pfw_exists "$name" || kc_pfw_fail "Unknown forward: $name" || return 1
+    kc_pfw_exists "$name" || kc_pfw_notice "Forward does not exist: $name" || return 1
     kc_pfw_load "$name" || return 1
 
     echo "$PFW_NAME $PFW_LISTEN_HOST:$PFW_LISTEN_PORT $PFW_TARGET_HOST:$PFW_TARGET_PORT"
@@ -441,7 +478,7 @@ kc_pfw_del() {
     name="$1"
 
     kc_pfw_valid_name "$name" || kc_pfw_fail "Invalid name for del." || return 1
-    kc_pfw_exists "$name" || kc_pfw_fail "Unknown forward: $name" || return 1
+    kc_pfw_exists "$name" || kc_pfw_notice "Forward does not exist: $name" || return 1
 
     file="$(kc_pfw_state_file "$name")"
     pid_file="$(kc_pfw_pid_file "$name")"
