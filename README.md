@@ -4,7 +4,7 @@ KaisarCode shell utilities.
 
 ## Overview
 
-`kc-sh` is a collection of standalone shell tools.
+`kc-sh` is a collection of shell utilities.
 
 ## Included Tools
 
@@ -12,11 +12,11 @@ KaisarCode shell utilities.
 | :--- | :--- |
 | **`kc-sh`** | Dispatcher. Runs tools as `kc-sh <tool>`. |
 | **`kc-shm`** | Key-value store backed by `/dev/shm`. |
-| **`kc-dmn`** | Unix socket interface for daemon processes. |
+| **`kc-dmn`** | Unix socket interface for daemons. |
 | **`kc-wch`** | File watcher emitting `add`, `upd`, `del`. |
 | **`kc-fifo`** | Named pipe (FIFO) manager. |
 | **`kc-chat`** | Interactive loop delegator for subprocesses. |
-| **`kc-chml`** |  Wraps standard input in a single ChatML message. |
+| **`kc-chml`** | Wraps standard input in a single ChatML message. |
 | **`kc-inp`** | Standard input handler. |
 | **`kc-kcs`** | Workspace validation tool. |
 | **`kc-ngr`** | N-gram generator. |
@@ -24,20 +24,7 @@ KaisarCode shell utilities.
 | **`kc-tfr`** | Token frequency matcher for candidate generation. |
 | **`kc-tpm`** | Text profile similarity matcher between files. |
 | **`kc-env`** | Activates a directory as a virtual environment. |
-
-## Installation
-
-Add the directory to `PATH`:
-
-```bash
-export PATH="$PATH:/path/to/kc-sh"
-```
-
-Or run directly:
-
-```bash
-./kc-sh --help
-```
+| **`kc-pfw`** | Persistent TCP port forwarding manager. |
 
 ---
 
