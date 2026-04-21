@@ -408,7 +408,6 @@ kc_pfw_set() {
     kc_pfw_load "$name" || return 1
     kc_pfw_start_loaded || return 1
 
-    echo "set"
     return 0
 
 }
@@ -451,7 +450,6 @@ kc_pfw_del() {
     kc_pfw_stop "$name" >/dev/null 2>&1 || return 1
     rm -f "$file" "$pid_file" "$log_file" || return 1
 
-    echo "del"
     return 0
 
 }
