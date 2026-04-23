@@ -15,6 +15,7 @@ kc_kcs_help() {
     echo
     echo "Options:"
     echo "  -type <t>        Force file type: sh|shell|c|cpp|php|md"
+    echo "  -e, --exclude <p> Exclude path pattern"
     echo "  <file|dir>...    Validate one or more files or directories"
     echo "  -h, --help       Show help"
     echo
@@ -638,10 +639,14 @@ collect_artifacts() {
             continue
         fi
         if [ -d "$arg" ]; then
-            find "$arg" -mindepth 1 \
-                \( -type d \( -path '*/lib/inc' -o -path '*/lib/obj' -o -path '*/vendor' -o -path '*/vendors' -o -path '*/third_party' -o -path '*/third-party' \) \) -prune -o \
-                \( -type d -name '.*' -o -type f -name '.*' \) -prune -o \
-                -type f -print0
+            local find_cmd=(find "$arg" -mindepth 1)
+            find_cmd+=(\( -type d \( -path '*/lib/inc' -o -path '*/lib/obj' -o -path '*/vendor' -o -path '*/vendors' -o -path '*/third_party' -o -path '*/third-party' \) \) -prune -o)
+            find_cmd+=(\( -type d -name '.*' -o -type f -name '.*' \) -prune -o)
+            for exc in "${KC_KCS_EXCLUDES[@]}"; do
+                find_cmd+=(\( -path "*$exc*" \) -prune -o)
+            done
+            find_cmd+=(-type f -print0)
+            "${find_cmd[@]}"
         fi
     done
 }
@@ -684,6 +689,15 @@ run_validator() {
 # @return 0 on success, 1 on failure.
 main() {
     local force_type=""
+    local excludes=()
+
+    if [ -f ".kcsignore" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${line// /}" ]] && continue
+            excludes+=("$line")
+        done < ".kcsignore"
+    fi
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -697,6 +711,11 @@ main() {
                 force_type="$(normalize_file_type "$1")" || \
                 kc_kcs_fail "Invalid value for -type." || return 1
                 ;;
+            -e|--exclude)
+                shift
+                [ -n "$1" ] || kc_kcs_fail "Missing value for --exclude." || return 1
+                excludes+=("$1")
+                ;;
             *)
                 break
                 ;;
@@ -705,7 +724,9 @@ main() {
     done
 
     [ "$#" -gt 0 ] || kc_kcs_fail "Missing file or directory." || return 1
-    KC_KCS_FORCE_TYPE="$force_type" run_validator "$@"
+    export KC_KCS_FORCE_TYPE="$force_type"
+    KC_KCS_EXCLUDES=("${excludes[@]}")
+    run_validator "$@"
 }
 
 main "$@"
