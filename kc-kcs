@@ -351,7 +351,7 @@ validate_shell_rules() {
             fail "$file_path: Shell shebang must be /bin/sh or /bin/bash."
             ;;
     esac
-    if ! shellcheck "$file_path" >/dev/null 2>&1; then
+    if ! shellcheck -x "$file_path" >/dev/null 2>&1; then
         fail "$file_path: shellcheck validation failed."
     fi
     pass "$file_path: Shell rules verified."
