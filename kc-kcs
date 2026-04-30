@@ -467,22 +467,7 @@ validate_no_internal_comments() {
                 if (NR > 20) { print NR; exit }
             }
             index(scan, sl as) && scan !~ /^[[:space:]]*\/\*\*/ {
-                closing_line = NR
-                in_block_comment = 1
-                next
-            }
-            in_block_comment {
-                if (index($0, as sl)) {
-                    in_block_comment = 0
-                    closing_line = NR
-                }
-                next
-            }
-            closing_line && NR == closing_line + 1 {
-                if ($0 ~ /^(if|for|while|switch|return|[[:space:]]*[a-zA-Z0-9_]+ =)/) {
-                    print NR - 1; exit
-                }
-                closing_line = 0
+                print NR; exit
             }
             scan ~ /^[[:space:]]*\/\*\*/ { in_docblock = 1 }
             in_docblock && /@return/ { seen_return = 1 }
